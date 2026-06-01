@@ -1,0 +1,31 @@
+# Example docker-compose for running forgemill-mcp alongside an existing
+# Forgemill deployment. Copy to docker-compose.yml, fill in the env vars
+# (or move them to a .env file next to this), and `docker compose up -d`.
+
+services:
+  forgemill-mcp:
+    image: ghcr.io/blink-zero/forgemill-mcp:latest
+    container_name: forgemill-mcp
+    restart: unless-stopped
+    ports:
+      - "3030:3030"
+    environment:
+      # Required
+      FORGEMILL_URL: "https://forgemill.example.com"
+      FORGEMILL_API_KEY: "${FORGEMILL_API_KEY:?set FORGEMILL_API_KEY in your .env}"
+
+      # Optional
+      FORGEMILL_VERIFY_TLS: "true"             # set to "false" for self-signed certs
+      FORGEMILL_MCP_ALLOW_MUTATIONS: "false"   # set to "true" to enable write tools
+      # FORGEMILL_MCP_AUTH_TOKEN: ""           # protect the MCP endpoint with a bearer token
+      # FORGEMILL_MCP_PORT: "3030"
+      # FORGEMILL_REQUEST_TIMEOUT: "30"
+
+    # Tighten the container surface
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:size=16M
