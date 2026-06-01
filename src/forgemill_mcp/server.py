@@ -65,6 +65,12 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
         return _dump(await client.get_target(target_id))
 
     @mcp.tool()
+    async def get_target_resources(target_id: int) -> str:
+        """Return the resource inventory of a target — datastores, networks,
+        folders, resource pools — as the hypervisor reports them."""
+        return _dump(await client.get_target_resources(target_id))
+
+    @mcp.tool()
     async def list_templates() -> str:
         """List VM templates synced from your hypervisors."""
         return _dump(await client.list_templates())
@@ -106,6 +112,18 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
     async def list_vm_executions(vm_id: int) -> str:
         """List action-execution history for a VM."""
         return _dump(await client.list_vm_executions(vm_id))
+
+    @mcp.tool()
+    async def get_vm_console_url(vm_id: int) -> str:
+        """Return the hypervisor-native console URL for a VM (VMRC for vSphere,
+        noVNC for Proxmox). Admin-only on the Forgemill side — will 403 if the
+        API key is for a non-admin user."""
+        return _dump(await client.get_vm_console_url(vm_id))
+
+    @mcp.tool()
+    async def list_vm_disks(vm_id: int) -> str:
+        """List the disks attached to a VM as the hypervisor reports them."""
+        return _dump(await client.list_vm_disks(vm_id))
 
     @mcp.tool()
     async def list_actions() -> str:
@@ -170,6 +188,38 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
         async def sync_all_vms() -> str:
             """Force an immediate refresh of every VM's state from its hypervisor."""
             return _dump(await client.sync_all_vms())
+
+        @mcp.tool()
+        async def test_target(target_id: int) -> str:
+            """Run a connection test against a target. Returns { success, message }
+            so even a failed test is a valid response — don't treat false as an error."""
+            return _dump(await client.test_target(target_id))
+
+        @mcp.tool()
+        async def sync_target_templates(target_id: int) -> str:
+            """Pull the latest template inventory from a target into Forgemill's
+            local database."""
+            return _dump(await client.sync_target_templates(target_id))
+
+        @mcp.tool()
+        async def get_vm_credentials(vm_id: int) -> str:
+            """Reveal the deploy-time SSH credentials for a VM (username + password
+            decrypted on demand). Sensitive — the API call is audit-logged."""
+            return _dump(await client.get_vm_credentials(vm_id))
+
+        @mcp.tool()
+        async def resize_vm(vm_id: int, cpu: int, memory_mb: int) -> str:
+            """Resize a VM's CPU count and memory. VM may need to be powered off
+            first depending on the hypervisor and hot-add settings."""
+            return _dump(await client.resize_vm(vm_id, cpu, memory_mb))
+
+        @mcp.tool()
+        async def expand_vm_disk(
+            vm_id: int, disk_key: int, new_size_gb: int
+        ) -> str:
+            """Expand a specific VM disk to a larger size. Cannot shrink. The
+            disk_key comes from list_vm_disks."""
+            return _dump(await client.expand_vm_disk(vm_id, disk_key, new_size_gb))
 
         @mcp.tool()
         async def create_snapshot(

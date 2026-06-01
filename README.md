@@ -55,12 +55,14 @@ All configuration is via environment variables.
 
 - `server_version` — Forgemill version and commit
 - `dashboard_summary` — counts and recent activity
-- `list_targets` / `get_target` — configured hypervisors
+- `list_targets` / `get_target` / `get_target_resources` — configured hypervisors + their datastore/network/folder inventory
 - `list_templates` / `get_template` — synced templates
 - `list_vms` — managed VMs, with optional filters: `power_state`, `target_name`, `os_match`
 - `get_vm` — full VM record
 - `list_vm_snapshots` — snapshots for a VM
+- `list_vm_disks` — disks attached to a VM
 - `list_vm_executions` — action history for a VM
+- `get_vm_console_url` — VMRC / noVNC URL for a VM *(admin-only on the Forgemill side)*
 - `list_actions` — available post-deploy actions
 - `get_execution` — execution details and output
 - `list_blueprints` — saved deployment blueprints
@@ -69,19 +71,33 @@ All configuration is via environment variables.
 
 ### Gated (set `FORGEMILL_MCP_ALLOW_MUTATIONS=true`)
 
+VM lifecycle:
 - `power_vm(vm_id, action)` — `start` / `stop` / `restart` / `suspend`
 - `sync_vm(vm_id)` / `sync_all_vms()` — force a hypervisor refresh
+- `resize_vm(vm_id, cpu, memory_mb)`
+- `expand_vm_disk(vm_id, disk_key, new_size_gb)`
 - `create_snapshot(vm_id, name, description?, memory?)`
 - `revert_snapshot(vm_id, snapshot_id)`
 - `delete_snapshot(vm_id, snapshot_id)`
 - `delete_vm(vm_id, force?)`
+- `get_vm_credentials(vm_id)` — reveals stored deploy-time SSH credentials (sensitive, audit-logged)
+
+Actions:
 - `execute_action(vm_id, action_id? | script?, parameter_values?, timeout_seconds?)`
 - `cancel_execution(execution_id)`
+
+Deployment:
 - `deploy_vm(...)` — full template-based deploy with cloud-init fields
 - `deploy_from_blueprint(blueprint_id, vm_name)`
 - `get_deployment(deployment_id)`
 
+Targets:
+- `test_target(target_id)` — runs a connection test (returns `success: bool`)
+- `sync_target_templates(target_id)` — pulls the latest templates from a target
+
 Each mutating call still goes through the regular Forgemill RBAC checks — the API key inherits its user's role.
+
+**Heads up on roles** — most mutating endpoints in Forgemill require **admin** (power, snapshot, delete, resize, disk expand, target test/sync, VM credentials). `execute_action`, `deploy_vm`, and `deploy_from_blueprint` are **user+**. If your API key is for a viewer or user, the corresponding tools will return a 403 from Forgemill. Plan accordingly when issuing the key.
 
 ---
 

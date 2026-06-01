@@ -135,6 +135,37 @@ class ForgemillClient:
     async def sync_all_vms(self) -> dict[str, Any]:
         return await self._request("POST", "/vms/sync-all")
 
+    async def get_vm_credentials(self, vm_id: int) -> dict[str, Any]:
+        """Reveal the deploy-time credentials for a VM. Admin only on Forgemill side."""
+        return await self._request("GET", f"/vms/{vm_id}/credentials")
+
+    async def list_vm_disks(self, vm_id: int) -> list[dict[str, Any]]:
+        return await self._request("GET", f"/vms/{vm_id}/disks") or []
+
+    async def resize_vm(self, vm_id: int, cpu: int, memory_mb: int) -> dict[str, Any]:
+        return await self._request(
+            "PUT", f"/vms/{vm_id}/resize", json={"cpu": cpu, "memory_mb": memory_mb}
+        )
+
+    async def expand_vm_disk(
+        self, vm_id: int, disk_key: int, new_size_gb: int
+    ) -> dict[str, Any]:
+        return await self._request(
+            "PUT",
+            f"/vms/{vm_id}/disks/{disk_key}/expand",
+            json={"new_size_gb": new_size_gb},
+        )
+
+    # --- Target admin operations ------------------------------------------
+
+    async def test_target(self, target_id: int) -> dict[str, Any]:
+        """Run a connection test against a target. Returns { success, message }."""
+        return await self._request("POST", f"/targets/{target_id}/test")
+
+    async def sync_target_templates(self, target_id: int) -> dict[str, Any]:
+        """Pull the template list from a target into Forgemill's database."""
+        return await self._request("POST", f"/targets/{target_id}/sync")
+
     # --- Actions / executions ---------------------------------------------
 
     async def list_actions(self) -> list[dict[str, Any]]:
