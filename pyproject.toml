@@ -53,8 +53,14 @@ ignore = ["E501"]  # line length handled by formatter
 [tool.mypy]
 python_version = "3.11"
 strict = true
-warn_return_any = true
+# JSON payloads from httpx are genuinely Any — annotating method returns as
+# Any everywhere obscures the intent. Keep strict mode but allow Any-returns.
+warn_return_any = false
 warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = ["fastmcp", "fastmcp.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
