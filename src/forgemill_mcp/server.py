@@ -301,6 +301,7 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
             disk_gb: int | None = None,
             datacenter: str = "",
             cluster: str = "",
+            host: str = "",
             datastore: str = "",
             folder: str = "",
             network: str = "",
@@ -329,6 +330,8 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
                 body["datacenter"] = datacenter
             if cluster:
                 body["cluster"] = cluster
+            if host:
+                body["host"] = host
             if datastore:
                 body["datastore"] = datastore
             if folder:
@@ -363,98 +366,57 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
         @mcp.tool()
         async def create_action(
             name: str,
-            description: str,
-            category: str,
             script: str,
-            parameters: list[dict[str, Any]] | None = None,
-            script_type: str = "bash",
+            description: str = "",
+            category: str = "custom",
             platform: str = "linux",
+            script_type: str = "bash",
+            parameters: list[dict[str, Any]] | None = None,
         ) -> str:
-            """Create a custom post-deploy action.
+            """Create and save a reusable Forgemill custom action.
 
-            - name: short label shown in the Actions page
-            - description: one-line summary
-            - category: one of 'packages', 'scripts', 'security', 'monitoring', 'custom'
-            - script: bash script (max ~64KB) executed over SSH on target VMs
-            - parameters (optional): list of parameter dicts. Each entry:
-                { "name": "PARAM_FOO" (^[A-Z][A-Z0-9_]*$),
-                  "label": "Foo",
-                  "type": "string" | "number" | "select" | "boolean" | "password",
-                  "required": bool,
-                  "default": str,
-                  "placeholder": str,
-                  "options": [str, ...]   # required when type == "select"
-                  "description": str }
-            - script_type: defaults to 'bash'
-            - platform: defaults to 'linux'
-
-            Returns the created action including its assigned ID. Built-in actions
-            cannot be created this way — Forgemill rejects names that collide."""
+            category must be one of: packages, scripts, security, monitoring, custom.
+            platform is usually linux or windows. parameters is optional and follows
+            Forgemill's action parameter schema."""
             body: dict[str, Any] = {
                 "name": name,
                 "description": description,
                 "category": category,
-                "script": script,
-                "script_type": script_type,
                 "platform": platform,
+                "script_type": script_type,
+                "script": script,
+                "parameters": parameters or [],
             }
-            if parameters:
-                body["parameters"] = parameters
             return _dump(await client.create_action(body))
 
         @mcp.tool()
         async def update_action(
             action_id: int,
-            name: str | None = None,
-            description: str | None = None,
-            category: str | None = None,
-            script: str | None = None,
+            name: str,
+            script: str,
+            description: str = "",
+            category: str = "custom",
+            platform: str = "linux",
+            script_type: str = "bash",
             parameters: list[dict[str, Any]] | None = None,
-            script_type: str | None = None,
-            platform: str | None = None,
         ) -> str:
-            """Update fields of a custom action. Fetches the existing record first
-            and only overrides the fields you pass — call it like a PATCH. Built-in
-            actions are rejected by Forgemill with a 400."""
-            current = await client.get_action(action_id)
-            if current is None:
-                return f"error: action {action_id} not found"
-            if current.get("builtin"):
-                return (
-                    "error: built-in actions cannot be modified — copy this action "
-                    "into a new one and edit the copy instead"
-                )
+            """Update a reusable Forgemill custom action by ID. Built-in actions may be protected by Forgemill."""
             body: dict[str, Any] = {
-                "name": name if name is not None else current.get("name", ""),
-                "description": description
-                if description is not None
-                else current.get("description", ""),
-                "category": category
-                if category is not None
-                else current.get("category", "custom"),
-                "script": script if script is not None else current.get("script", ""),
-                "script_type": script_type
-                if script_type is not None
-                else current.get("script_type", "bash"),
-                "platform": platform
-                if platform is not None
-                else current.get("platform", "linux"),
-                "parameters": parameters
-                if parameters is not None
-                else current.get("parameters") or [],
+                "name": name,
+                "description": description,
+                "category": category,
+                "platform": platform,
+                "script_type": script_type,
+                "script": script,
+                "parameters": parameters or [],
             }
             return _dump(await client.update_action(action_id, body))
 
         @mcp.tool()
         async def delete_action(action_id: int) -> str:
-            """Delete a custom action. Built-in actions are rejected by Forgemill."""
-            current = await client.get_action(action_id)
-            if current is None:
-                return f"error: action {action_id} not found"
-            if current.get("builtin"):
-                return "error: built-in actions cannot be deleted"
-            await client.delete_action(action_id)
-            return "ok"
+            """Delete a saved Forgemill action by ID. Do not delete built-in/shared actions unless explicitly requested."""
+            result = await client.delete_action(action_id)
+            return _dump(result or {"status": "deleted"})
 
     return mcp
 

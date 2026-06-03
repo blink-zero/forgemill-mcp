@@ -201,10 +201,11 @@ class ForgemillClient:
         built-in actions with a 400."""
         return await self._request("PUT", f"/actions/{action_id}", json=body)
 
-    async def delete_action(self, action_id: int) -> None:
+    async def delete_action(self, action_id: int) -> dict[str, Any] | None:
         """Delete a custom action. Forgemill rejects deletes of built-in
-        actions with a 400."""
-        await self._request("DELETE", f"/actions/{action_id}")
+        actions with a 400. Returns whatever Forgemill responds with (often
+        nothing — caller should fall back to a synthesised status)."""
+        return await self._request("DELETE", f"/actions/{action_id}")
 
     async def execute_action(
         self,
