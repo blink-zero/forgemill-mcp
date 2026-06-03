@@ -63,7 +63,8 @@ All configuration is via environment variables.
 - `list_vm_disks` — disks attached to a VM
 - `list_vm_executions` — action history for a VM
 - `get_vm_console_url` — VMRC / noVNC URL for a VM *(admin-only on the Forgemill side)*
-- `list_actions` — available post-deploy actions
+- `list_actions` — available post-deploy actions (built-in + custom)
+- `get_action` — full action record by ID (script + parameter schema)
 - `get_execution` — execution details and output
 - `list_blueprints` — saved deployment blueprints
 - `list_history` — paginated deployment history with status / target / search filters
@@ -85,6 +86,9 @@ VM lifecycle:
 Actions:
 - `execute_action(vm_id, action_id? | script?, parameter_values?, timeout_seconds?)`
 - `cancel_execution(execution_id)`
+- `create_action(name, description, category, script, parameters?, script_type?, platform?)` *(admin-only)*
+- `update_action(action_id, name?, description?, category?, script?, parameters?, ...)` *(admin-only — refuses built-ins)*
+- `delete_action(action_id)` *(admin-only — refuses built-ins)*
 
 Deployment:
 - `deploy_vm(...)` — full template-based deploy with cloud-init fields
@@ -97,7 +101,7 @@ Targets:
 
 Each mutating call still goes through the regular Forgemill RBAC checks — the API key inherits its user's role.
 
-**Heads up on roles** — most mutating endpoints in Forgemill require **admin** (power, snapshot, delete, resize, disk expand, target test/sync, VM credentials). `execute_action`, `deploy_vm`, and `deploy_from_blueprint` are **user+**. If your API key is for a viewer or user, the corresponding tools will return a 403 from Forgemill. Plan accordingly when issuing the key.
+**Heads up on roles** — most mutating endpoints in Forgemill require **admin** (power, snapshot, delete, resize, disk expand, target test/sync, VM credentials, action create/update/delete). `execute_action`, `deploy_vm`, and `deploy_from_blueprint` are **user+**. If your API key is for a viewer or user, the corresponding tools will return a 403 from Forgemill. Plan accordingly when issuing the key.
 
 ---
 
