@@ -171,6 +171,41 @@ class ForgemillClient:
     async def list_actions(self) -> list[dict[str, Any]]:
         return await self._request("GET", "/actions") or []
 
+    async def get_action(self, action_id: int) -> dict[str, Any] | None:
+        """Forgemill doesn't expose GET /actions/{id} — fetch the list and filter.
+        Returns None if no matching action."""
+        actions = await self.list_actions()
+        for a in actions:
+            if int(a.get("id", -1)) == action_id:
+                return a
+        return None
+
+    async def create_action(self, body: dict[str, Any]) -> dict[str, Any]:
+        """Create a custom action. Body shape:
+        {
+          "name": str,
+          "description": str,
+          "category": "packages" | "scripts" | "security" | "monitoring" | "custom",
+          "script": str,                       # bash, max 64KB
+          "script_type": "bash",              # optional, defaults to bash
+          "platform": "linux",                # optional, defaults to linux
+          "parameters": [ActionParameter, ...] # optional
+        }
+        Built-in actions cannot be created — they ship with Forgemill."""
+        return await self._request("POST", "/actions", json=body)
+
+    async def update_action(
+        self, action_id: int, body: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Update an existing custom action. Forgemill rejects updates to
+        built-in actions with a 400."""
+        return await self._request("PUT", f"/actions/{action_id}", json=body)
+
+    async def delete_action(self, action_id: int) -> None:
+        """Delete a custom action. Forgemill rejects deletes of built-in
+        actions with a 400."""
+        await self._request("DELETE", f"/actions/{action_id}")
+
     async def execute_action(
         self,
         vm_id: int,
