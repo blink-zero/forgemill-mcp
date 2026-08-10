@@ -301,32 +301,28 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
                 await client.deploy_blueprint(blueprint_id, vm_name=vm_name)
             )
 
-        @mcp.tool()
-        async def deploy_vm(
+        def _build_deploy_body(
             template_id: int,
             target_id: int,
             vm_name: str,
             cpu: int,
             memory_mb: int,
-            disk_gb: int | None = None,
-            datacenter: str = "",
-            cluster: str = "",
-            host: str = "",
-            datastore: str = "",
-            folder: str = "",
-            network: str = "",
-            ip_address: str = "",
-            netmask: str = "",
-            gateway: str = "",
-            dns: list[str] | None = None,
-            hostname: str = "",
-            domain_name: str = "",
-            ssh_public_key: str = "",
-            action_ids: list[int] | None = None,
-        ) -> str:
-            """Deploy a VM directly from a template. Most fields are optional and use
-            target defaults. Returns the deployment record including its ID — poll
-            with get_deployment to track progress."""
+            disk_gb: int | None,
+            datacenter: str,
+            cluster: str,
+            host: str,
+            datastore: str,
+            folder: str,
+            network: str,
+            ip_address: str,
+            netmask: str,
+            gateway: str,
+            dns: list[str] | None,
+            hostname: str,
+            domain_name: str,
+            ssh_public_key: str,
+            action_ids: list[int] | None,
+        ) -> dict[str, Any]:
             body: dict[str, Any] = {
                 "template_id": template_id,
                 "target_id": target_id,
@@ -364,7 +360,81 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
                 body["ssh_public_key"] = ssh_public_key
             if action_ids:
                 body["action_ids"] = action_ids
+            return body
+
+        @mcp.tool()
+        async def deploy_vm(
+            template_id: int,
+            target_id: int,
+            vm_name: str,
+            cpu: int,
+            memory_mb: int,
+            disk_gb: int | None = None,
+            datacenter: str = "",
+            cluster: str = "",
+            host: str = "",
+            datastore: str = "",
+            folder: str = "",
+            network: str = "",
+            ip_address: str = "",
+            netmask: str = "",
+            gateway: str = "",
+            dns: list[str] | None = None,
+            hostname: str = "",
+            domain_name: str = "",
+            ssh_public_key: str = "",
+            action_ids: list[int] | None = None,
+        ) -> str:
+            """Deploy a VM directly from a template. Most fields are optional and use
+            target defaults. Returns the deployment record including its ID — poll
+            with get_deployment to track progress. Consider calling preview_deploy
+            first with the same arguments to catch name collisions or a typo'd
+            network/datastore/folder/cluster/datacenter before committing."""
+            body = _build_deploy_body(
+                template_id, target_id, vm_name, cpu, memory_mb, disk_gb,
+                datacenter, cluster, host, datastore, folder, network,
+                ip_address, netmask, gateway, dns, hostname, domain_name,
+                ssh_public_key, action_ids,
+            )
             return _dump(await client.deploy_vm(body))
+
+        @mcp.tool()
+        async def preview_deploy(
+            template_id: int,
+            target_id: int,
+            vm_name: str,
+            cpu: int,
+            memory_mb: int,
+            disk_gb: int | None = None,
+            datacenter: str = "",
+            cluster: str = "",
+            host: str = "",
+            datastore: str = "",
+            folder: str = "",
+            network: str = "",
+            ip_address: str = "",
+            netmask: str = "",
+            gateway: str = "",
+            dns: list[str] | None = None,
+            hostname: str = "",
+            domain_name: str = "",
+            ssh_public_key: str = "",
+            action_ids: list[int] | None = None,
+        ) -> str:
+            """Check whether a deploy_vm call with these exact arguments would be
+            accepted, WITHOUT creating anything. Catches an invalid VM name, a VM
+            name already in use on the target, and a network/datastore/folder/
+            cluster/datacenter name that doesn't exist there. Does not check
+            datastore free space or other capacity. Returns {valid, blockers,
+            warnings} — a target that can't be reached to verify its resources
+            shows up as a warning, not a blocker."""
+            body = _build_deploy_body(
+                template_id, target_id, vm_name, cpu, memory_mb, disk_gb,
+                datacenter, cluster, host, datastore, folder, network,
+                ip_address, netmask, gateway, dns, hostname, domain_name,
+                ssh_public_key, action_ids,
+            )
+            return _dump(await client.preview_deploy(body))
 
         @mcp.tool()
         async def get_deployment(deployment_id: int) -> str:
@@ -380,6 +450,14 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
             was created. Use this instead of stitching together get_deployment
             + get_vm_credentials + audit logs by hand."""
             return _dump(await client.get_deployment_manifest(deployment_id))
+
+        @mcp.tool()
+        async def get_deployment_timeline(deployment_id: int) -> str:
+            """Get a deployment's provisioning logs and audit-trail entries
+            merged into one chronological list, oldest first. Use this instead
+            of fetching logs and audit events separately and interleaving them
+            yourself."""
+            return _dump(await client.get_deployment_timeline(deployment_id))
 
         # --- Action CRUD ---
 
