@@ -371,6 +371,16 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
             """Get the current status and logs of a deployment by ID."""
             return _dump(await client.get_deployment(deployment_id))
 
+        @mcp.tool()
+        async def get_deployment_manifest(deployment_id: int) -> str:
+            """Get a single receipt for a deployment: what it did, where, who
+            triggered it, the exact inputs used, the outcome, a reference to
+            where its credentials live (never the credential value itself),
+            and concrete undo options (delete/untrack/preview-delete) if a VM
+            was created. Use this instead of stitching together get_deployment
+            + get_vm_credentials + audit logs by hand."""
+            return _dump(await client.get_deployment_manifest(deployment_id))
+
         # --- Action CRUD ---
 
         @mcp.tool()

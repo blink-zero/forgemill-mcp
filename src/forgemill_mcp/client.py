@@ -265,6 +265,9 @@ class ForgemillClient:
     async def get_deployment(self, deployment_id: int) -> dict[str, Any]:
         return await self._request("GET", f"/deploy/{deployment_id}")
 
+    async def get_deployment_manifest(self, deployment_id: int) -> dict[str, Any]:
+        return await self._request("GET", f"/deployments/{deployment_id}/manifest")
+
     # --- History ----------------------------------------------------------
 
     async def list_history(
