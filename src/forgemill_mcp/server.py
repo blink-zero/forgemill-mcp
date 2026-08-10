@@ -438,6 +438,28 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
             result = await client.delete_action(action_id)
             return _dump(result or {"status": "deleted"})
 
+        @mcp.tool()
+        async def list_action_versions(action_id: int) -> str:
+            """List every version of a saved action, newest first — the current
+            live content plus every version it superseded. Each edit to an
+            action creates a new version rather than overwriting history."""
+            return _dump(await client.list_action_versions(action_id))
+
+        @mcp.tool()
+        async def get_action_version(action_id: int, version: int) -> str:
+            """Get one specific version's content for a saved action (works for
+            both the current version and any superseded one)."""
+            return _dump(await client.get_action_version(action_id, version))
+
+        @mcp.tool()
+        async def rollback_action(action_id: int, version: int) -> str:
+            """Restore a saved action's content to an earlier version. This does
+            not rewrite history — the restored content becomes a brand new
+            version number, like a revert rather than a reset, so nothing already
+            recorded is lost. Refuses built-in actions and refuses rolling back
+            to the version that's already current."""
+            return _dump(await client.rollback_action(action_id, version))
+
     return mcp
 
 
