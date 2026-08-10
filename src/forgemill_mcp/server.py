@@ -381,6 +381,14 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
             + get_vm_credentials + audit logs by hand."""
             return _dump(await client.get_deployment_manifest(deployment_id))
 
+        @mcp.tool()
+        async def get_deployment_timeline(deployment_id: int) -> str:
+            """Get a deployment's provisioning logs and audit-trail entries
+            merged into one chronological list, oldest first. Use this instead
+            of fetching logs and audit events separately and interleaving them
+            yourself."""
+            return _dump(await client.get_deployment_timeline(deployment_id))
+
         # --- Action CRUD ---
 
         @mcp.tool()
