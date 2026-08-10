@@ -271,6 +271,10 @@ class ForgemillClient:
     async def deploy_vm(self, body: dict[str, Any]) -> dict[str, Any]:
         return await self._request("POST", "/deploy", json=body)
 
+    async def preview_deploy(self, body: dict[str, Any]) -> dict[str, Any]:
+        """Same body shape as deploy_vm, but Forgemill only validates — no VM is created."""
+        return await self._request("POST", "/deploy/preflight", json=body)
+
     async def get_deployment(self, deployment_id: int) -> dict[str, Any]:
         return await self._request("GET", f"/deploy/{deployment_id}")
 
