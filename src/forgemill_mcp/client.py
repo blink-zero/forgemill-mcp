@@ -217,6 +217,15 @@ class ForgemillClient:
         nothing — caller should fall back to a synthesised status)."""
         return await self._request("DELETE", f"/actions/{action_id}")
 
+    async def list_action_versions(self, action_id: int) -> list[dict[str, Any]]:
+        return await self._request("GET", f"/actions/{action_id}/versions") or []
+
+    async def get_action_version(self, action_id: int, version: int) -> dict[str, Any]:
+        return await self._request("GET", f"/actions/{action_id}/versions/{version}")
+
+    async def rollback_action(self, action_id: int, version: int) -> dict[str, Any]:
+        return await self._request("POST", f"/actions/{action_id}/rollback", json={"version": version})
+
     async def execute_action(
         self,
         vm_id: int,
