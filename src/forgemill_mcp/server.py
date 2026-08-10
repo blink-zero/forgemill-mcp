@@ -192,9 +192,14 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
             return _dump(await client.sync_vm(vm_id))
 
         @mcp.tool()
-        async def sync_all_vms() -> str:
-            """Force an immediate refresh of every VM's state from its hypervisor."""
-            return _dump(await client.sync_all_vms())
+        async def sync_all_vms(dry_run: bool = False) -> str:
+            """Force an immediate refresh of every VM's state from its hypervisor.
+
+            Any VM the hypervisor no longer reports is untracked from Forgemill —
+            the response's orphaned_vms lists exactly which ones (id/name/ref).
+            Pass dry_run=True to see what would be untracked without removing
+            anything."""
+            return _dump(await client.sync_all_vms(dry_run=dry_run))
 
         @mcp.tool()
         async def test_target(target_id: int) -> str:
@@ -251,10 +256,15 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
             return "ok"
 
         @mcp.tool()
-        async def delete_vm(vm_id: int, force: bool = False) -> str:
+        async def delete_vm(vm_id: int, force: bool = False, dry_run: bool = False) -> str:
             """Delete a VM from the hypervisor and from Forgemill. Irreversible.
-            force=True only removes the Forgemill record without touching the hypervisor."""
-            await client.delete_vm(vm_id, force=force)
+            force=True only removes the Forgemill record without touching the hypervisor.
+            Pass dry_run=True to preview what this call would do (hypervisor delete vs.
+            untrack-only, plus dependent snapshot/execution counts) without deleting
+            anything — recommended before a force=False call on a VM you're unsure about."""
+            result = await client.delete_vm(vm_id, force=force, dry_run=dry_run)
+            if dry_run:
+                return _dump(result)
             return "ok"
 
         @mcp.tool()
@@ -360,6 +370,16 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
         async def get_deployment(deployment_id: int) -> str:
             """Get the current status and logs of a deployment by ID."""
             return _dump(await client.get_deployment(deployment_id))
+
+        @mcp.tool()
+        async def get_deployment_manifest(deployment_id: int) -> str:
+            """Get a single receipt for a deployment: what it did, where, who
+            triggered it, the exact inputs used, the outcome, a reference to
+            where its credentials live (never the credential value itself),
+            and concrete undo options (delete/untrack/preview-delete) if a VM
+            was created. Use this instead of stitching together get_deployment
+            + get_vm_credentials + audit logs by hand."""
+            return _dump(await client.get_deployment_manifest(deployment_id))
 
         # --- Action CRUD ---
 

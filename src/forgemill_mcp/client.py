@@ -31,6 +31,7 @@ class ForgemillClient:
         *,
         verify: bool = True,
         timeout: float = 30.0,
+        transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self._client = httpx.AsyncClient(
             base_url=base_url.rstrip("/"),
@@ -41,6 +42,7 @@ class ForgemillClient:
             },
             verify=verify,
             timeout=timeout,
+            transport=transport,
         )
 
     async def close(self) -> None:
@@ -125,15 +127,23 @@ class ForgemillClient:
     async def delete_snapshot(self, vm_id: int, snap_id: int) -> None:
         await self._request("DELETE", f"/vms/{vm_id}/snapshots/{snap_id}")
 
-    async def delete_vm(self, vm_id: int, *, force: bool = False) -> None:
-        params = {"force": "true"} if force else {}
-        await self._request("DELETE", f"/vms/{vm_id}", params=params)
+    async def delete_vm(
+        self, vm_id: int, *, force: bool = False, dry_run: bool = False
+    ) -> dict[str, Any] | None:
+        params = {}
+        if force:
+            params["force"] = "true"
+        if dry_run:
+            params["dry_run"] = "true"
+        # dry_run responses carry a preview body; a real delete returns 204/None.
+        return await self._request("DELETE", f"/vms/{vm_id}", params=params)
 
     async def sync_vm(self, vm_id: int) -> dict[str, Any]:
         return await self._request("POST", f"/vms/{vm_id}/sync")
 
-    async def sync_all_vms(self) -> dict[str, Any]:
-        return await self._request("POST", "/vms/sync-all")
+    async def sync_all_vms(self, *, dry_run: bool = False) -> dict[str, Any]:
+        params = {"dry_run": "true"} if dry_run else {}
+        return await self._request("POST", "/vms/sync-all", params=params)
 
     async def get_vm_credentials(self, vm_id: int) -> dict[str, Any]:
         """Reveal the deploy-time credentials for a VM. Admin only on Forgemill side."""
@@ -254,6 +264,9 @@ class ForgemillClient:
 
     async def get_deployment(self, deployment_id: int) -> dict[str, Any]:
         return await self._request("GET", f"/deploy/{deployment_id}")
+
+    async def get_deployment_manifest(self, deployment_id: int) -> dict[str, Any]:
+        return await self._request("GET", f"/deployments/{deployment_id}/manifest")
 
     # --- History ----------------------------------------------------------
 
