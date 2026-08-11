@@ -470,12 +470,15 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
             platform: str = "linux",
             script_type: str = "bash",
             parameters: list[dict[str, Any]] | None = None,
+            tags: list[str] | None = None,
         ) -> str:
             """Create and save a reusable Forgemill custom action.
 
             category must be one of: packages, scripts, security, monitoring, custom.
             platform is usually linux or windows. parameters is optional and follows
-            Forgemill's action parameter schema."""
+            Forgemill's action parameter schema. tags are free-form searchable
+            keywords (e.g. "docker", "database") — Forgemill trims/lowercases/dedupes
+            them, max 10 tags of 30 chars each."""
             body: dict[str, Any] = {
                 "name": name,
                 "description": description,
@@ -484,6 +487,7 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
                 "script_type": script_type,
                 "script": script,
                 "parameters": parameters or [],
+                "tags": tags or [],
             }
             return _dump(await client.create_action(body))
 
@@ -497,8 +501,11 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
             platform: str = "linux",
             script_type: str = "bash",
             parameters: list[dict[str, Any]] | None = None,
+            tags: list[str] | None = None,
         ) -> str:
-            """Update a reusable Forgemill custom action by ID. Built-in actions may be protected by Forgemill."""
+            """Update a reusable Forgemill custom action by ID. Built-in actions
+            may be protected by Forgemill. This is a full PUT-style replacement —
+            omitting tags clears them, it does not leave existing tags untouched."""
             body: dict[str, Any] = {
                 "name": name,
                 "description": description,
@@ -507,6 +514,7 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
                 "script_type": script_type,
                 "script": script,
                 "parameters": parameters or [],
+                "tags": tags or [],
             }
             return _dump(await client.update_action(action_id, body))
 
