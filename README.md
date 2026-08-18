@@ -65,6 +65,7 @@ All configuration is via environment variables.
 - `get_vm_console_url` — VMRC / noVNC URL for a VM *(admin-only on the Forgemill side)*
 - `list_actions` — available post-deploy actions (built-in + custom)
 - `get_action` — full action record by ID (script + parameter schema)
+- `export_actions(action_ids?)` — actions as the same JSON Forgemill's web UI downloads; omit `action_ids` to export everything
 - `get_execution` — execution details and output
 - `list_blueprints` — saved deployment blueprints
 - `list_history` — paginated deployment history with status / target / search filters
@@ -89,6 +90,7 @@ Actions:
 - `create_action(name, description, category, script, parameters?, script_type?, platform?)` *(admin-only)*
 - `update_action(action_id, name?, description?, category?, script?, parameters?, ...)` *(admin-only — refuses built-ins)*
 - `delete_action(action_id)` *(admin-only — refuses built-ins)*
+- `import_actions(actions)` — bulk-create from a list of exported entries (from `export_actions` or the web UI's download); bad entries fail individually without blocking the rest *(admin-only)*
 
 Deployment:
 - `deploy_vm(...)` — full template-based deploy with cloud-init fields

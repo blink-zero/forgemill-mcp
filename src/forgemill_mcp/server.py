@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import UTC, datetime
 from typing import Any
 
 from fastmcp import FastMCP
@@ -24,6 +25,34 @@ def _dump(payload: Any) -> str:
     """Stable JSON serialisation for tool return values."""
 
     return json.dumps(payload, indent=2, default=str, sort_keys=True)
+
+
+# Fields carried into an exported action entry. Mirrors Forgemill's web UI
+# export format exactly (id/builtin/version/timestamps are instance-specific
+# and deliberately left out — re-derived on import).
+_EXPORT_FIELDS = (
+    "name",
+    "description",
+    "category",
+    "script",
+    "script_type",
+    "platform",
+    "parameters",
+    "tags",
+)
+
+
+def _to_export_entry(action: dict[str, Any]) -> dict[str, Any]:
+    return {field: action.get(field) for field in _EXPORT_FIELDS}
+
+
+def _build_export_file(actions: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "exported_at": datetime.now(UTC).isoformat(),
+        "source": "forgemill",
+        "actions": [_to_export_entry(a) for a in actions],
+    }
 
 
 def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
@@ -136,6 +165,20 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
         parameter schema — by ID. Returns an empty object if no match."""
         action = await client.get_action(action_id)
         return _dump(action) if action is not None else "{}"
+
+    @mcp.tool()
+    async def export_actions(action_ids: list[int] | None = None) -> str:
+        """Export actions in the same JSON shape Forgemill's web UI downloads
+        (schema_version/exported_at/source/actions). Pass action_ids to export
+        a specific subset; omit to export everything list_actions returns
+        (built-in and custom). The result can be fed straight into
+        import_actions, or written to a file for someone to import through
+        the web UI's "Import" button — the two are interchangeable."""
+        actions = await client.list_actions()
+        if action_ids is not None:
+            wanted = set(action_ids)
+            actions = [a for a in actions if int(a.get("id", -1)) in wanted]
+        return _dump(_build_export_file(actions))
 
     @mcp.tool()
     async def get_execution(execution_id: int) -> str:
@@ -523,6 +566,18 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
             """Delete a saved Forgemill action by ID. Do not delete built-in/shared actions unless explicitly requested."""
             result = await client.delete_action(action_id)
             return _dump(result or {"status": "deleted"})
+
+        @mcp.tool()
+        async def import_actions(actions: list[dict[str, Any]]) -> str:
+            """Bulk-create actions from a list of exported entries (as produced
+            by export_actions, or a file downloaded from Forgemill's web UI —
+            pass its "actions" array here, one dict per action). Each entry is
+            validated exactly like create_action; a bad entry only fails that
+            entry, so a partial batch still imports what's valid. Imported
+            actions are always plain (non-builtin, bash) actions — this can't
+            create anything create_action couldn't. Capped at 100 entries per
+            call."""
+            return _dump(await client.import_actions(actions))
 
         @mcp.tool()
         async def list_action_versions(action_id: int) -> str:
