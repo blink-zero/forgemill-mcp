@@ -226,6 +226,16 @@ class ForgemillClient:
     async def rollback_action(self, action_id: int, version: int) -> dict[str, Any]:
         return await self._request("POST", f"/actions/{action_id}/rollback", json={"version": version})
 
+    async def import_actions(self, actions: list[dict[str, Any]]) -> dict[str, Any]:
+        """Bulk-create actions from a list of exported entries (same body
+        shape as create_action, one dict per action). Each entry is validated
+        exactly like create_action — a bad entry only fails that entry, the
+        rest of the batch still imports. Forgemill caps a single import at
+        100 entries. Response shape:
+        {"created": int, "failed": int, "results": [{"index", "name",
+        "status", "id"?, "error"?}, ...]}"""
+        return await self._request("POST", "/actions/import", json={"actions": actions})
+
     async def execute_action(
         self,
         vm_id: int,
