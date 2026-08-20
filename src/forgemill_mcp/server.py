@@ -55,6 +55,74 @@ def _build_export_file(actions: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _build_deploy_body(
+    template_id: int,
+    target_id: int,
+    vm_name: str,
+    cpu: int,
+    memory_mb: int,
+    disk_gb: int | None,
+    datacenter: str,
+    cluster: str,
+    host: str,
+    datastore: str,
+    folder: str,
+    network: str,
+    ip_address: str,
+    netmask: str,
+    gateway: str,
+    dns: list[str] | None,
+    hostname: str,
+    domain_name: str,
+    ssh_public_key: str,
+    disk_provisioning: str,
+    action_ids: list[int] | None,
+) -> dict[str, Any]:
+    """Shared body builder for deploy_vm and preview_deploy — they must send
+    an identical shape, since preview_deploy's entire point is to predict
+    what deploy_vm would do with the same arguments."""
+    body: dict[str, Any] = {
+        "template_id": template_id,
+        "target_id": target_id,
+        "vm_name": vm_name,
+        "cpu": cpu,
+        "memory_mb": memory_mb,
+    }
+    if disk_gb is not None:
+        body["disk_gb"] = disk_gb
+    if datacenter:
+        body["datacenter"] = datacenter
+    if cluster:
+        body["cluster"] = cluster
+    if host:
+        body["host"] = host
+    if datastore:
+        body["datastore"] = datastore
+    if folder:
+        body["folder"] = folder
+    if network:
+        body["network"] = network
+    if ip_address:
+        body["ip_address"] = ip_address
+    if netmask:
+        body["netmask"] = netmask
+    if gateway:
+        body["gateway"] = gateway
+    if dns:
+        body["dns"] = dns
+    if hostname:
+        body["hostname"] = hostname
+    if domain_name:
+        body["domain_name"] = domain_name
+    if ssh_public_key:
+        body["ssh_public_key"] = ssh_public_key
+    if disk_provisioning:
+        body["disk_provisioning"] = disk_provisioning
+    if action_ids:
+        body["action_ids"] = action_ids
+    return body
+
+
 def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
     """Build a FastMCP server with read-only tools and, if enabled, mutating tools."""
 
@@ -344,67 +412,6 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
                 await client.deploy_blueprint(blueprint_id, vm_name=vm_name)
             )
 
-        def _build_deploy_body(
-            template_id: int,
-            target_id: int,
-            vm_name: str,
-            cpu: int,
-            memory_mb: int,
-            disk_gb: int | None,
-            datacenter: str,
-            cluster: str,
-            host: str,
-            datastore: str,
-            folder: str,
-            network: str,
-            ip_address: str,
-            netmask: str,
-            gateway: str,
-            dns: list[str] | None,
-            hostname: str,
-            domain_name: str,
-            ssh_public_key: str,
-            action_ids: list[int] | None,
-        ) -> dict[str, Any]:
-            body: dict[str, Any] = {
-                "template_id": template_id,
-                "target_id": target_id,
-                "vm_name": vm_name,
-                "cpu": cpu,
-                "memory_mb": memory_mb,
-            }
-            if disk_gb is not None:
-                body["disk_gb"] = disk_gb
-            if datacenter:
-                body["datacenter"] = datacenter
-            if cluster:
-                body["cluster"] = cluster
-            if host:
-                body["host"] = host
-            if datastore:
-                body["datastore"] = datastore
-            if folder:
-                body["folder"] = folder
-            if network:
-                body["network"] = network
-            if ip_address:
-                body["ip_address"] = ip_address
-            if netmask:
-                body["netmask"] = netmask
-            if gateway:
-                body["gateway"] = gateway
-            if dns:
-                body["dns"] = dns
-            if hostname:
-                body["hostname"] = hostname
-            if domain_name:
-                body["domain_name"] = domain_name
-            if ssh_public_key:
-                body["ssh_public_key"] = ssh_public_key
-            if action_ids:
-                body["action_ids"] = action_ids
-            return body
-
         @mcp.tool()
         async def deploy_vm(
             template_id: int,
@@ -426,18 +433,23 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
             hostname: str = "",
             domain_name: str = "",
             ssh_public_key: str = "",
+            disk_provisioning: str = "",
             action_ids: list[int] | None = None,
         ) -> str:
             """Deploy a VM directly from a template. Most fields are optional and use
             target defaults. Returns the deployment record including its ID — poll
             with get_deployment to track progress. Consider calling preview_deploy
             first with the same arguments to catch name collisions or a typo'd
-            network/datastore/folder/cluster/datacenter before committing."""
+            network/datastore/folder/cluster/datacenter before committing.
+
+            disk_provisioning is vCenter/ESXi-only (ignored on Proxmox): one of
+            "thin", "thick", or "thick_eager_zero". Leave empty to use the
+            template's existing provisioning."""
             body = _build_deploy_body(
                 template_id, target_id, vm_name, cpu, memory_mb, disk_gb,
                 datacenter, cluster, host, datastore, folder, network,
                 ip_address, netmask, gateway, dns, hostname, domain_name,
-                ssh_public_key, action_ids,
+                ssh_public_key, disk_provisioning, action_ids,
             )
             return _dump(await client.deploy_vm(body))
 
@@ -462,6 +474,7 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
             hostname: str = "",
             domain_name: str = "",
             ssh_public_key: str = "",
+            disk_provisioning: str = "",
             action_ids: list[int] | None = None,
         ) -> str:
             """Check whether a deploy_vm call with these exact arguments would be
@@ -475,7 +488,7 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
                 template_id, target_id, vm_name, cpu, memory_mb, disk_gb,
                 datacenter, cluster, host, datastore, folder, network,
                 ip_address, netmask, gateway, dns, hostname, domain_name,
-                ssh_public_key, action_ids,
+                ssh_public_key, disk_provisioning, action_ids,
             )
             return _dump(await client.preview_deploy(body))
 
