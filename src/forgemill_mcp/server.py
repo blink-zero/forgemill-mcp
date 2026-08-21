@@ -76,6 +76,7 @@ def _build_deploy_body(
     domain_name: str,
     ssh_public_key: str,
     disk_provisioning: str,
+    vlan_tag: int | None,
     action_ids: list[int] | None,
 ) -> dict[str, Any]:
     """Shared body builder for deploy_vm and preview_deploy — they must send
@@ -118,6 +119,8 @@ def _build_deploy_body(
         body["ssh_public_key"] = ssh_public_key
     if disk_provisioning:
         body["disk_provisioning"] = disk_provisioning
+    if vlan_tag is not None:
+        body["vlan_tag"] = vlan_tag
     if action_ids:
         body["action_ids"] = action_ids
     return body
@@ -434,6 +437,7 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
             domain_name: str = "",
             ssh_public_key: str = "",
             disk_provisioning: str = "",
+            vlan_tag: int | None = None,
             action_ids: list[int] | None = None,
         ) -> str:
             """Deploy a VM directly from a template. Most fields are optional and use
@@ -444,12 +448,17 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
 
             disk_provisioning is vCenter/ESXi-only (ignored on Proxmox): one of
             "thin", "thick", or "thick_eager_zero". Leave empty to use the
-            template's existing provisioning."""
+            template's existing provisioning.
+
+            vlan_tag is Proxmox-only (ignored on vCenter/ESXi, where VLAN
+            membership is part of the network/portgroup itself): an 802.1Q
+            VLAN ID from 1-4094. Leave unset for an untagged NIC on the
+            bridge."""
             body = _build_deploy_body(
                 template_id, target_id, vm_name, cpu, memory_mb, disk_gb,
                 datacenter, cluster, host, datastore, folder, network,
                 ip_address, netmask, gateway, dns, hostname, domain_name,
-                ssh_public_key, disk_provisioning, action_ids,
+                ssh_public_key, disk_provisioning, vlan_tag, action_ids,
             )
             return _dump(await client.deploy_vm(body))
 
@@ -475,6 +484,7 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
             domain_name: str = "",
             ssh_public_key: str = "",
             disk_provisioning: str = "",
+            vlan_tag: int | None = None,
             action_ids: list[int] | None = None,
         ) -> str:
             """Check whether a deploy_vm call with these exact arguments would be
@@ -488,7 +498,7 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
                 template_id, target_id, vm_name, cpu, memory_mb, disk_gb,
                 datacenter, cluster, host, datastore, folder, network,
                 ip_address, netmask, gateway, dns, hostname, domain_name,
-                ssh_public_key, disk_provisioning, action_ids,
+                ssh_public_key, disk_provisioning, vlan_tag, action_ids,
             )
             return _dump(await client.preview_deploy(body))
 
