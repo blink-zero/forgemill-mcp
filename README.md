@@ -78,6 +78,7 @@ VM lifecycle:
 - `sync_vm(vm_id)` / `sync_all_vms()` — force a hypervisor refresh
 - `resize_vm(vm_id, cpu, memory_mb)`
 - `expand_vm_disk(vm_id, disk_key, new_size_gb)`
+- `add_vm_nic(vm_id, network, adapter_type?, connected?)` — hot-add a network adapter (vSphere only; `adapter_type` defaults to `vmxnet3`; pick `network` from `get_target_resources`)
 - `create_snapshot(vm_id, name, description?, memory?)`
 - `revert_snapshot(vm_id, snapshot_id)`
 - `delete_snapshot(vm_id, snapshot_id)`
@@ -103,7 +104,7 @@ Targets:
 
 Each mutating call still goes through the regular Forgemill RBAC checks — the API key inherits its user's role.
 
-**Heads up on roles** — most mutating endpoints in Forgemill require **admin** (power, snapshot, delete, resize, disk expand, target test/sync, VM credentials, action create/update/delete). `execute_action`, `deploy_vm`, and `deploy_from_blueprint` are **user+**. If your API key is for a viewer or user, the corresponding tools will return a 403 from Forgemill. Plan accordingly when issuing the key.
+**Heads up on roles** — most mutating endpoints in Forgemill require **admin** (power, snapshot, delete, resize, disk expand, NIC add, target test/sync, VM credentials, action create/update/delete). `execute_action`, `deploy_vm`, and `deploy_from_blueprint` are **user+**. If your API key is for a viewer or user, the corresponding tools will return a 403 from Forgemill. Plan accordingly when issuing the key.
 
 ---
 
