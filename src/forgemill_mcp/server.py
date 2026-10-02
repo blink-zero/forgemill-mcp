@@ -226,6 +226,17 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
         return _dump(await client.list_vm_disks(vm_id))
 
     @mcp.tool()
+    async def list_vm_nics(vm_id: int) -> str:
+        """List every network adapter on a VM, live from the hypervisor: label,
+        network/portgroup (vSphere) or bridge (Proxmox), adapter model, MAC,
+        VLAN tag (Proxmox), connected state, and the guest-reported IP
+        addresses on that adapter (IPv4 first). Use this rather than get_vm's
+        single ip_address when a VM has more than one interface. addresses is
+        empty when VMware Tools / the QEMU guest agent isn't running in the
+        guest — the adapter is still listed with its network and MAC."""
+        return _dump(await client.list_vm_nics(vm_id))
+
+    @mcp.tool()
     async def list_actions() -> str:
         """List available post-deploy actions (built-in and custom)."""
         return _dump(await client.list_actions())
@@ -353,27 +364,44 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
             network: str,
             adapter_type: str = "",
             connected: bool = True,
+            vlan_tag: int | None = None,
         ) -> str:
-            """Attach an additional virtual network adapter to an existing VM.
-            vSphere (vCenter / ESXi) only — Proxmox targets return a clear
-            "not available" error. This is a hot-add: the VM is not power-cycled
-            and existing adapters are untouched. Forgemill re-syncs the VM
-            record afterwards.
+            """Attach an additional virtual network adapter to an existing VM
+            (vCenter, ESXi, Proxmox). The VM is never power-cycled and existing
+            adapters are untouched; Forgemill re-syncs the VM record afterwards.
 
-            network must be a network/portgroup from get_target_resources for
-            the VM's target — use the entry's "path" when present (nested
-            vCenter portgroups don't resolve by bare name), else its "name".
-            adapter_type is one of vmxnet3 (default — leave empty), e1000e, or
-            e1000. connected=True (default) connects the adapter immediately
-            when the VM is running and at the next power-on.
+            network comes from get_target_resources for the VM's target: on
+            vSphere a network/portgroup — use the entry's "path" when present
+            (nested vCenter portgroups don't resolve by bare name), else its
+            "name"; on Proxmox a bridge name such as "vmbr0".
+
+            adapter_type: leave empty for the provider default (vmxnet3 on
+            vSphere, virtio on Proxmox). vSphere also accepts e1000e / e1000;
+            Proxmox also accepts e1000, e1000e, vmxnet3, rtl8139. The full list
+            per target type is in get_target_resources' provider metadata
+            (nic_adapter_types).
+
+            vlan_tag (1-4094) is Proxmox-only — on vSphere the VLAN belongs to
+            the portgroup, so pick a tagged portgroup instead; passing vlan_tag
+            there is rejected. connected=True (default) connects the adapter
+            immediately when the VM is running and at the next power-on.
+
+            On Proxmox the adapter is hot-plugged when the VM's hotplug setting
+            includes "network" (the default); otherwise the result has
+            pending=true and it attaches at the next power cycle — tell the
+            user rather than rebooting on their behalf.
 
             The new adapter shows up in the guest as an unconfigured interface;
             configure addressing inside the guest OS (e.g. via execute_action)
             afterwards. Returns the attached adapter: key, label, adapter_type,
-            network, mac_address, connected."""
+            network, mac_address, connected, vlan_tag, pending."""
             return _dump(
                 await client.add_vm_nic(
-                    vm_id, network, adapter_type=adapter_type, connected=connected
+                    vm_id,
+                    network,
+                    adapter_type=adapter_type,
+                    connected=connected,
+                    vlan_tag=vlan_tag,
                 )
             )
 

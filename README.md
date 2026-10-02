@@ -61,6 +61,7 @@ All configuration is via environment variables.
 - `get_vm` — full VM record
 - `list_vm_snapshots` — snapshots for a VM
 - `list_vm_disks` — disks attached to a VM
+- `list_vm_nics` — every network adapter on a VM: network/bridge, model, MAC, VLAN, connected, guest-reported addresses
 - `list_vm_executions` — action history for a VM
 - `get_vm_console_url` — VMRC / noVNC URL for a VM *(admin-only on the Forgemill side)*
 - `list_actions` — available post-deploy actions (built-in + custom)
@@ -78,7 +79,7 @@ VM lifecycle:
 - `sync_vm(vm_id)` / `sync_all_vms()` — force a hypervisor refresh
 - `resize_vm(vm_id, cpu, memory_mb)`
 - `expand_vm_disk(vm_id, disk_key, new_size_gb)`
-- `add_vm_nic(vm_id, network, adapter_type?, connected?)` — hot-add a network adapter (vSphere only; `adapter_type` defaults to `vmxnet3`; pick `network` from `get_target_resources`)
+- `add_vm_nic(vm_id, network, adapter_type?, connected?, vlan_tag?)` — add a network adapter without a power cycle (vSphere + Proxmox; `adapter_type` defaults to the provider's — `vmxnet3` / `virtio`; `vlan_tag` is Proxmox-only; pick `network` from `get_target_resources`)
 - `create_snapshot(vm_id, name, description?, memory?)`
 - `revert_snapshot(vm_id, snapshot_id)`
 - `delete_snapshot(vm_id, snapshot_id)`
