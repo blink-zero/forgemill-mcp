@@ -348,6 +348,36 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
             return _dump(await client.expand_vm_disk(vm_id, disk_key, new_size_gb))
 
         @mcp.tool()
+        async def add_vm_nic(
+            vm_id: int,
+            network: str,
+            adapter_type: str = "",
+            connected: bool = True,
+        ) -> str:
+            """Attach an additional virtual network adapter to an existing VM.
+            vSphere (vCenter / ESXi) only — Proxmox targets return a clear
+            "not available" error. This is a hot-add: the VM is not power-cycled
+            and existing adapters are untouched. Forgemill re-syncs the VM
+            record afterwards.
+
+            network must be a network/portgroup from get_target_resources for
+            the VM's target — use the entry's "path" when present (nested
+            vCenter portgroups don't resolve by bare name), else its "name".
+            adapter_type is one of vmxnet3 (default — leave empty), e1000e, or
+            e1000. connected=True (default) connects the adapter immediately
+            when the VM is running and at the next power-on.
+
+            The new adapter shows up in the guest as an unconfigured interface;
+            configure addressing inside the guest OS (e.g. via execute_action)
+            afterwards. Returns the attached adapter: key, label, adapter_type,
+            network, mac_address, connected."""
+            return _dump(
+                await client.add_vm_nic(
+                    vm_id, network, adapter_type=adapter_type, connected=connected
+                )
+            )
+
+        @mcp.tool()
         async def create_snapshot(
             vm_id: int, name: str, description: str = "", memory: bool = False
         ) -> str:
