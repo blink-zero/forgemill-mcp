@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Install
@@ -25,11 +25,18 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.12 is the floor we ship tests against; 3.14 is what the Docker
+        # image runs, so a 3.14 failure here blocks the image bump.
+        python-version: ["3.12", "3.13", "3.14"]
+    name: test (py${{ matrix.python-version }})
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
       - name: Install
         run: |
           python -m pip install --upgrade pip
