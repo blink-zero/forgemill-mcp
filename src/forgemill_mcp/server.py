@@ -226,6 +226,17 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
         return _dump(await client.list_vm_disks(vm_id))
 
     @mcp.tool()
+    async def list_vm_nics(vm_id: int) -> str:
+        """List every network adapter on a VM, live from the hypervisor: label,
+        network/portgroup (vSphere) or bridge (Proxmox), adapter model, MAC,
+        VLAN tag (Proxmox), connected state, and the guest-reported IP
+        addresses on that adapter (IPv4 first). Use this rather than get_vm's
+        single ip_address when a VM has more than one interface. addresses is
+        empty when VMware Tools / the QEMU guest agent isn't running in the
+        guest — the adapter is still listed with its network and MAC."""
+        return _dump(await client.list_vm_nics(vm_id))
+
+    @mcp.tool()
     async def list_actions() -> str:
         """List available post-deploy actions (built-in and custom)."""
         return _dump(await client.list_actions())
