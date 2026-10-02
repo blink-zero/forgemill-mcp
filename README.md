@@ -61,6 +61,7 @@ All configuration is via environment variables.
 - `get_vm` — full VM record
 - `list_vm_snapshots` — snapshots for a VM
 - `list_vm_disks` — disks attached to a VM
+- `list_vm_nics` — every network adapter on a VM: network/bridge, model, MAC, VLAN, connected, guest-reported addresses
 - `list_vm_executions` — action history for a VM
 - `get_vm_console_url` — VMRC / noVNC URL for a VM *(admin-only on the Forgemill side)*
 - `list_actions` — available post-deploy actions (built-in + custom)

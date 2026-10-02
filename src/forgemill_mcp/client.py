@@ -152,6 +152,11 @@ class ForgemillClient:
     async def list_vm_disks(self, vm_id: int) -> list[dict[str, Any]]:
         return await self._request("GET", f"/vms/{vm_id}/disks") or []
 
+    async def list_vm_nics(self, vm_id: int) -> list[dict[str, Any]]:
+        """Network adapters live from the hypervisor: key, label, adapter_type,
+        network, mac_address, connected, vlan_tag?, pending?, addresses[]."""
+        return await self._request("GET", f"/vms/{vm_id}/nics") or []
+
     async def resize_vm(self, vm_id: int, cpu: int, memory_mb: int) -> dict[str, Any]:
         return await self._request(
             "PUT", f"/vms/{vm_id}/resize", json={"cpu": cpu, "memory_mb": memory_mb}

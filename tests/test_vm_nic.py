@@ -141,6 +141,45 @@ async def test_add_vm_nic_unsupported_provider_surfaces_forgemill_message() -> N
     assert "Proxmox" in exc.value.message
 
 
+@pytest.mark.asyncio
+async def test_list_vm_nics_gets_path_and_returns_list() -> None:
+    nics = [
+        {
+            "key": 4000,
+            "label": "Network adapter 1",
+            "adapter_type": "vmxnet3",
+            "network": "VM Network",
+            "mac_address": "00:50:56:AA:BB:01",
+            "connected": True,
+            "addresses": ["10.20.10.11", "fe80::1"],
+        },
+        {
+            "key": 4001,
+            "label": "Network adapter 2",
+            "adapter_type": "e1000e",
+            "network": "dvPG-Backend",
+            "mac_address": "00:50:56:AA:BB:02",
+            "connected": False,
+            "addresses": [],
+        },
+    ]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "GET"
+        assert request.url.path == "/api/vms/42/nics"
+        return httpx.Response(200, json=nics)
+
+    assert await _client(handler).list_vm_nics(42) == nics
+
+
+@pytest.mark.asyncio
+async def test_list_vm_nics_empty_body_is_empty_list() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=[])
+
+    assert await _client(handler).list_vm_nics(42) == []
+
+
 # --- server tool registry ----------------------------------------------------
 
 
@@ -155,6 +194,7 @@ _READ_TOOLS = {
     "list_vms",
     "get_vm",
     "list_vm_disks",
+    "list_vm_nics",
     "list_actions",
     "export_actions",
     "list_history",
