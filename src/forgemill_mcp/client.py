@@ -173,16 +173,20 @@ class ForgemillClient:
         *,
         adapter_type: str = "",
         connected: bool = True,
+        vlan_tag: int | None = None,
     ) -> dict[str, Any]:
-        """Attach an additional network adapter to a VM (vSphere only).
+        """Attach an additional network adapter to a VM.
 
         adapter_type is left out of the body when empty so Forgemill applies
-        its own default (vmxnet3) rather than this client guessing one.
-        Response shape: {"status": "attached", "nic": {key, label,
-        adapter_type, network, mac_address, connected}}."""
+        the provider's default (vmxnet3 on vSphere, virtio on Proxmox) rather
+        than this client guessing one. vlan_tag is Proxmox-only and omitted
+        when None. Response shape: {"status": "attached", "nic": {key, label,
+        adapter_type, network, mac_address, connected, vlan_tag?, pending?}}."""
         body: dict[str, Any] = {"network": network, "connected": connected}
         if adapter_type:
             body["adapter_type"] = adapter_type
+        if vlan_tag is not None:
+            body["vlan_tag"] = vlan_tag
         return await self._request("POST", f"/vms/{vm_id}/nics", json=body)
 
     # --- Target admin operations ------------------------------------------

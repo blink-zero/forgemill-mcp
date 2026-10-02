@@ -88,6 +88,21 @@ async def test_add_vm_nic_passes_explicit_adapter_and_connected_false() -> None:
 
 
 @pytest.mark.asyncio
+async def test_add_vm_nic_passes_vlan_tag_only_when_given() -> None:
+    bodies: list[dict[str, Any]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        bodies.append(_json.loads(request.content))
+        return httpx.Response(201, json=_ATTACHED)
+
+    c = _client(handler)
+    await c.add_vm_nic(7, "vmbr0", vlan_tag=20)
+    await c.add_vm_nic(7, "vmbr0")
+    assert bodies[0] == {"network": "vmbr0", "connected": True, "vlan_tag": 20}
+    assert "vlan_tag" not in bodies[1]
+
+
+@pytest.mark.asyncio
 async def test_add_vm_nic_vm_not_found_raises_with_status() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(404, json={"error": "VM not found"})
@@ -193,10 +208,13 @@ async def test_add_vm_nic_tool_schema_exposes_expected_parameters() -> None:
         await client.close()
     assert tool is not None
     props = tool.parameters["properties"]
-    assert set(props) == {"vm_id", "network", "adapter_type", "connected"}
+    assert set(props) == {"vm_id", "network", "adapter_type", "connected", "vlan_tag"}
     assert set(tool.parameters.get("required", [])) == {"vm_id", "network"}
     assert props["adapter_type"]["default"] == ""
     assert props["connected"]["default"] is True
+    assert props["vlan_tag"]["default"] is None
     # The description is what an agent reads to decide how to call it.
-    assert "vSphere" in (tool.description or "")
-    assert "vmxnet3" in (tool.description or "")
+    desc = tool.description or ""
+    assert "vSphere" in desc and "Proxmox" in desc
+    assert "vmxnet3" in desc and "virtio" in desc
+    assert "pending" in desc
