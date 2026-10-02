@@ -166,6 +166,25 @@ class ForgemillClient:
             json={"new_size_gb": new_size_gb},
         )
 
+    async def add_vm_nic(
+        self,
+        vm_id: int,
+        network: str,
+        *,
+        adapter_type: str = "",
+        connected: bool = True,
+    ) -> dict[str, Any]:
+        """Attach an additional network adapter to a VM (vSphere only).
+
+        adapter_type is left out of the body when empty so Forgemill applies
+        its own default (vmxnet3) rather than this client guessing one.
+        Response shape: {"status": "attached", "nic": {key, label,
+        adapter_type, network, mac_address, connected}}."""
+        body: dict[str, Any] = {"network": network, "connected": connected}
+        if adapter_type:
+            body["adapter_type"] = adapter_type
+        return await self._request("POST", f"/vms/{vm_id}/nics", json=body)
+
     # --- Target admin operations ------------------------------------------
 
     async def test_target(self, target_id: int) -> dict[str, Any]:
