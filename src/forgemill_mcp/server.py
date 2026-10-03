@@ -78,6 +78,8 @@ def _build_deploy_body(
     disk_provisioning: str,
     vlan_tag: int | None,
     action_ids: list[int] | None,
+    extra_disks: list[dict[str, Any]] | None = None,
+    extra_nics: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Shared body builder for deploy_vm and preview_deploy — they must send
     an identical shape, since preview_deploy's entire point is to predict
@@ -123,6 +125,10 @@ def _build_deploy_body(
         body["vlan_tag"] = vlan_tag
     if action_ids:
         body["action_ids"] = action_ids
+    if extra_disks:
+        body["extra_disks"] = extra_disks
+    if extra_nics:
+        body["extra_nics"] = extra_nics
     return body
 
 
@@ -229,6 +235,27 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
         and pending=true for a Proxmox disk that attaches at the next power
         cycle. A Proxmox cloud-init drive shows as a slot with size_gb 0."""
         return _dump(await client.list_vm_disks(vm_id))
+
+    @mcp.tool()
+    async def list_vm_events(vm_id: int, limit: int = 100) -> str:
+        """Recent operational events for a VM, newest first — what the
+        hypervisor did or refused during operations on it (provider warnings
+        such as "network adapter added but the connect reconfigure failed",
+        attach results, destroy warnings). Each: level (info|warn|error),
+        message, created_at. Check this after an add_vm_disk / add_vm_nic /
+        expand_vm_disk or a failed operation before reaching for server logs."""
+        return _dump(await client.list_vm_events(vm_id, limit=limit))
+
+    @mcp.tool()
+    async def get_diagnostics() -> str:
+        """Operational snapshot of this Forgemill instance (admin API key
+        required): build version/commit, every target with its status, last
+        connection and last sync result (synced/orphaned counts and errors),
+        the most recent VM warnings/errors across all VMs, recent failed
+        deployments with their reasons, recent server-side 5xx errors, and
+        how many requests the rate limiter rejected. Use it to self-diagnose
+        a failing operation instead of asking for the server log."""
+        return _dump(await client.get_diagnostics())
 
     @mcp.tool()
     async def list_vm_nics(vm_id: int) -> str:
@@ -539,6 +566,8 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
             disk_provisioning: str = "",
             vlan_tag: int | None = None,
             action_ids: list[int] | None = None,
+            extra_disks: list[dict[str, Any]] | None = None,
+            extra_nics: list[dict[str, Any]] | None = None,
         ) -> str:
             """Deploy a VM directly from a template. Most fields are optional and use
             target defaults. Returns the deployment record including its ID — poll
@@ -553,12 +582,24 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
             vlan_tag is Proxmox-only (ignored on vCenter/ESXi, where VLAN
             membership is part of the network/portgroup itself): an 802.1Q
             VLAN ID from 1-4094. Leave unset for an untagged NIC on the
-            bridge."""
+            bridge.
+
+            extra_disks / extra_nics attach additional hardware right after
+            the clone (same rules as add_vm_disk / add_vm_nic; Forgemill
+            v0.19.1+). extra_disks: [{"size_gb": 20, "datastore": "ds-01",
+            "provisioning": "thin"}] — datastore/provisioning optional.
+            extra_nics: [{"network": "dvPG-Backend", "adapter_type": "vmxnet3",
+            "vlan_tag": 20, "connected": true}] — only network is required.
+            They arrive unformatted/unconfigured; run the built-in actions
+            "Format and Mount New Disk" / "Configure New Network Interface"
+            afterwards. If one cannot be attached the deployment is marked
+            failed and the VM is kept so it can be fixed from the VM page."""
             body = _build_deploy_body(
                 template_id, target_id, vm_name, cpu, memory_mb, disk_gb,
                 datacenter, cluster, host, datastore, folder, network,
                 ip_address, netmask, gateway, dns, hostname, domain_name,
                 ssh_public_key, disk_provisioning, vlan_tag, action_ids,
+                extra_disks, extra_nics,
             )
             return _dump(await client.deploy_vm(body))
 
@@ -586,6 +627,8 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
             disk_provisioning: str = "",
             vlan_tag: int | None = None,
             action_ids: list[int] | None = None,
+            extra_disks: list[dict[str, Any]] | None = None,
+            extra_nics: list[dict[str, Any]] | None = None,
         ) -> str:
             """Check whether a deploy_vm call with these exact arguments would be
             accepted, WITHOUT creating anything. Catches an invalid VM name, a VM
@@ -599,6 +642,7 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
                 datacenter, cluster, host, datastore, folder, network,
                 ip_address, netmask, gateway, dns, hostname, domain_name,
                 ssh_public_key, disk_provisioning, vlan_tag, action_ids,
+                extra_disks, extra_nics,
             )
             return _dump(await client.preview_deploy(body))
 
