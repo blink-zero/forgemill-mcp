@@ -95,3 +95,19 @@ def test_build_deploy_body_includes_all_optional_fields_when_set() -> None:
     assert body["vlan_tag"] == 150
     assert body["action_ids"] == [1, 2]
     assert body["dns"] == ["1.1.1.1"]
+
+
+def test_build_deploy_body_includes_extras_only_when_given() -> None:
+    body = _build_deploy_body(**_minimal())
+    assert "extra_disks" not in body and "extra_nics" not in body
+
+    body = _build_deploy_body(
+        **_minimal(),
+        extra_disks=[{"size_gb": 20}, {"size_gb": 5, "datastore": "ds-sata-01", "provisioning": "thick"}],
+        extra_nics=[{"network": "dvPG-Backend"}, {"network": "vmbr1", "vlan_tag": 20, "connected": False}],
+    )
+    assert body["extra_disks"] == [{"size_gb": 20}, {"size_gb": 5, "datastore": "ds-sata-01", "provisioning": "thick"}]
+    assert body["extra_nics"] == [{"network": "dvPG-Backend"}, {"network": "vmbr1", "vlan_tag": 20, "connected": False}]
+
+    body = _build_deploy_body(**_minimal(), extra_disks=[], extra_nics=[])
+    assert "extra_disks" not in body and "extra_nics" not in body
