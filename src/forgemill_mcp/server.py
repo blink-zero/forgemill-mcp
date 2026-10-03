@@ -237,6 +237,27 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
         return _dump(await client.list_vm_disks(vm_id))
 
     @mcp.tool()
+    async def list_vm_events(vm_id: int, limit: int = 100) -> str:
+        """Recent operational events for a VM, newest first — what the
+        hypervisor did or refused during operations on it (provider warnings
+        such as "network adapter added but the connect reconfigure failed",
+        attach results, destroy warnings). Each: level (info|warn|error),
+        message, created_at. Check this after an add_vm_disk / add_vm_nic /
+        expand_vm_disk or a failed operation before reaching for server logs."""
+        return _dump(await client.list_vm_events(vm_id, limit=limit))
+
+    @mcp.tool()
+    async def get_diagnostics() -> str:
+        """Operational snapshot of this Forgemill instance (admin API key
+        required): build version/commit, every target with its status, last
+        connection and last sync result (synced/orphaned counts and errors),
+        the most recent VM warnings/errors across all VMs, recent failed
+        deployments with their reasons, recent server-side 5xx errors, and
+        how many requests the rate limiter rejected. Use it to self-diagnose
+        a failing operation instead of asking for the server log."""
+        return _dump(await client.get_diagnostics())
+
+    @mcp.tool()
     async def list_vm_nics(vm_id: int) -> str:
         """List every network adapter on a VM, live from the hypervisor: label,
         network/portgroup (vSphere) or bridge (Proxmox), adapter model, MAC,

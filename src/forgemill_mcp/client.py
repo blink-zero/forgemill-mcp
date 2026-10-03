@@ -176,6 +176,19 @@ class ForgemillClient:
             body["provisioning"] = provisioning
         return await self._request("POST", f"/vms/{vm_id}/disks", json=body)
 
+    async def list_vm_events(self, vm_id: int, limit: int = 100) -> list[dict[str, Any]]:
+        """A VM's recent operational events (provider warnings, attach
+        results), newest first: id, vm_id, level (info|warn|error), message,
+        created_at. Forgemill v0.19.1+."""
+        return await self._request("GET", f"/vms/{vm_id}/events", params={"limit": limit}) or []
+
+    async def get_diagnostics(self) -> dict[str, Any]:
+        """Admin-only operational snapshot (Forgemill v0.19.1+): build info,
+        per-target status + last sync result, recent VM warnings/errors,
+        recent failed deployments, recent server-side errors and the
+        rate-limit rejection count."""
+        return await self._request("GET", "/diagnostics")
+
     async def list_vm_nics(self, vm_id: int) -> list[dict[str, Any]]:
         """Network adapters live from the hypervisor: key, label, adapter_type,
         network, mac_address, connected, vlan_tag?, pending?, addresses[]."""
