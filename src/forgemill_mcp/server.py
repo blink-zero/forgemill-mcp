@@ -222,7 +222,12 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
 
     @mcp.tool()
     async def list_vm_disks(vm_id: int) -> str:
-        """List the disks attached to a VM as the hypervisor reports them."""
+        """List every virtual disk on a VM, live from the hypervisor: key (use
+        it with expand_vm_disk), label, size_gb, the datastore (vSphere) or
+        storage (Proxmox) it lives on, provisioning (thin/thick on vSphere;
+        the volume format on Proxmox when known), the backing file/volume,
+        and pending=true for a Proxmox disk that attaches at the next power
+        cycle. A Proxmox cloud-init drive shows as a slot with size_gb 0."""
         return _dump(await client.list_vm_disks(vm_id))
 
     @mcp.tool()
@@ -357,6 +362,43 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
             """Expand a specific VM disk to a larger size. Cannot shrink. The
             disk_key comes from list_vm_disks."""
             return _dump(await client.expand_vm_disk(vm_id, disk_key, new_size_gb))
+
+        @mcp.tool()
+        async def add_vm_disk(
+            vm_id: int,
+            size_gb: int,
+            datastore: str = "",
+            provisioning: str = "",
+        ) -> str:
+            """Attach a new, empty virtual disk to an existing VM (vCenter, ESXi,
+            Proxmox). Hot-added — the VM is never power-cycled and existing
+            disks are untouched; Forgemill re-syncs the VM record afterwards.
+
+            size_gb: 1–65536. datastore: leave empty to use the datastore /
+            storage of the VM's first disk; otherwise a name from
+            get_target_resources' datastores for the VM's target. provisioning:
+            vSphere only — "thin" (default) or "thick"; on Proxmox the storage
+            decides and passing a value is rejected. The allowed list per target
+            type is in the provider metadata (disk_provisioning_types).
+
+            On Proxmox the disk is hot-plugged when the VM's hotplug setting
+            includes "disk" (the default); otherwise the result has pending=true
+            and it attaches at the next power cycle — tell the user rather than
+            rebooting on their behalf.
+
+            The guest sees a raw, unformatted block device: partition and
+            format it inside the OS (e.g. via execute_action) afterwards. To
+            grow an existing disk instead, use expand_vm_disk. Returns the
+            attached disk: key, label, size_gb, datastore, provisioning,
+            backing, pending."""
+            return _dump(
+                await client.add_vm_disk(
+                    vm_id,
+                    size_gb,
+                    datastore=datastore,
+                    provisioning=provisioning,
+                )
+            )
 
         @mcp.tool()
         async def add_vm_nic(

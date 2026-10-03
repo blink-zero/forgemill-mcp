@@ -150,7 +150,31 @@ class ForgemillClient:
         return await self._request("GET", f"/vms/{vm_id}/credentials")
 
     async def list_vm_disks(self, vm_id: int) -> list[dict[str, Any]]:
+        """Disks live from the hypervisor: key, label, size_gb, datastore,
+        provisioning (thin/thick on vSphere; volume format on Proxmox),
+        backing, pending?."""
         return await self._request("GET", f"/vms/{vm_id}/disks") or []
+
+    async def add_vm_disk(
+        self,
+        vm_id: int,
+        size_gb: int,
+        *,
+        datastore: str = "",
+        provisioning: str = "",
+    ) -> dict[str, Any]:
+        """Attach a new, empty virtual disk to a VM.
+
+        datastore and provisioning are left out of the body when empty so
+        Forgemill applies the defaults (the VM's first disk's datastore;
+        thin on vSphere). Response shape: {"status": "attached", "disk":
+        {key, label, size_gb, datastore, provisioning, backing, pending?}}."""
+        body: dict[str, Any] = {"size_gb": size_gb}
+        if datastore:
+            body["datastore"] = datastore
+        if provisioning:
+            body["provisioning"] = provisioning
+        return await self._request("POST", f"/vms/{vm_id}/disks", json=body)
 
     async def list_vm_nics(self, vm_id: int) -> list[dict[str, Any]]:
         """Network adapters live from the hypervisor: key, label, adapter_type,
