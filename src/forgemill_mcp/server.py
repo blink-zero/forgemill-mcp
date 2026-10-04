@@ -177,6 +177,25 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
         return _dump(await client.get_target_resources(target_id))
 
     @mcp.tool()
+    async def discover_vms(target_id: int, include_ignored: bool = False) -> str:
+        """Find VMs that exist on a target but that Forgemill does not manage
+        — a live read of the hypervisor right now (templates excluded). Returns
+        counts (managed / unmanaged / ignored, computed_at) and vms[]: ref (the
+        hypervisor's own id, used by adopt_vms), name, power_state, ip_address,
+        cpu, memory_mb, disk_gb, guest_id, host, ignored. VMs someone ignored
+        are hidden unless include_ignored=true. list_targets' unmanaged_vms is
+        the cached count from the last sync; this is the authoritative list.
+        Use it when the user asks what's on a host that Forgemill isn't
+        tracking, or before adopt_vms."""
+        return _dump(await client.discover_vms(target_id, include_ignored=include_ignored))
+
+    @mcp.tool()
+    async def list_ignored_vms(target_id: int) -> str:
+        """VMs on a target that were deliberately hidden from discover_vms
+        (vm_ref, vm_name, ignored_by, created_at)."""
+        return _dump(await client.list_ignored_vms(target_id))
+
+    @mcp.tool()
     async def list_templates() -> str:
         """List VM templates synced from your hypervisors."""
         return _dump(await client.list_templates())
@@ -191,14 +210,20 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
         power_state: str | None = None,
         target_name: str | None = None,
         os_match: str | None = None,
+        origin: str | None = None,
     ) -> str:
         """List managed VMs. Optionally filter by power_state (e.g. 'poweredOn',
-        'poweredOff', 'suspended'), target name, or substring match on os_type."""
+        'poweredOff', 'suspended'), target name, substring match on os_type, or
+        origin: 'deployed' (Forgemill created it), 'adopted' (discovered on the
+        target and taken under management — adopted_at/adopted_by say when and
+        by whom), 'registered' (added by ref)."""
         vms = await client.list_vms()
         if power_state:
             vms = [v for v in vms if v.get("power_state") == power_state]
         if target_name:
             vms = [v for v in vms if v.get("target_name") == target_name]
+        if origin:
+            vms = [v for v in vms if (v.get("origin") or "deployed") == origin]
         if os_match:
             needle = os_match.lower()
             vms = [v for v in vms if needle in (v.get("os_type") or "").lower()]
@@ -359,6 +384,57 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
             return _dump(await client.sync_all_vms(dry_run=dry_run))
 
         @mcp.tool()
+        async def adopt_vms(target_id: int, vm_refs: list[str]) -> str:
+            """Take existing VMs on a target under Forgemill management. vm_refs
+            are hypervisor refs from discover_vms (vSphere "vm-123", Proxmox
+            VMID "105"). Nothing on the hypervisor changes: each VM gets a
+            Forgemill record (origin=adopted), is synced right away, and power /
+            snapshots / disks / NICs / sync / destroy work immediately. Running
+            actions needs an SSH login — call set_vm_credentials afterwards.
+            Already-managed, unknown or template refs are reported in skipped[]
+            with a reason rather than failing the whole call. Admin by default;
+            the vm_adoption_role setting can open it to operators."""
+            return _dump(await client.adopt_vms(target_id, vm_refs))
+
+        @mcp.tool()
+        async def ignore_discovered_vms(target_id: int, vm_refs: list[str]) -> str:
+            """Hide VMs from discover_vms for this target (appliances, other
+            teams' VMs, anything that will never be Forgemill's business). They
+            stop counting as unmanaged; reversible with unignore_discovered_vms.
+            Adopting an ignored VM un-ignores it automatically."""
+            await client.ignore_discovered_vms(target_id, vm_refs)
+            return _dump({"ignored": vm_refs})
+
+        @mcp.tool()
+        async def unignore_discovered_vms(target_id: int, vm_refs: list[str]) -> str:
+            """Bring previously ignored VMs back into discover_vms."""
+            await client.unignore_discovered_vms(target_id, vm_refs)
+            return _dump({"unignored": vm_refs})
+
+        @mcp.tool()
+        async def set_vm_credentials(
+            vm_id: int, username: str, password: str = "", private_key: str = ""
+        ) -> str:
+            """Store the SSH login Forgemill uses to run actions on a VM —
+            required for adopted/registered VMs, and the way to update a
+            deployed VM after a password rotation (it takes precedence over the
+            deployment's credentials). Exactly one of password or private_key
+            (an unencrypted OpenSSH/PEM key; passphrase-protected keys are
+            rejected). The user needs passwordless sudo. Stored encrypted; the
+            secret is never written to the audit log and a private key is never
+            returned by get_vm_credentials. Same role gate as adopt_vms."""
+            await client.set_vm_credentials(vm_id, username, password=password, private_key=private_key)
+            return _dump({"vm_id": vm_id, "username": username, "kind": "private_key" if private_key else "password"})
+
+        @mcp.tool()
+        async def clear_vm_credentials(vm_id: int) -> str:
+            """Remove the explicit SSH login set on a VM. It falls back to its
+            deployment credentials if it has any; otherwise actions can't run
+            until set_vm_credentials is called again."""
+            await client.clear_vm_credentials(vm_id)
+            return _dump({"vm_id": vm_id, "cleared": True})
+
+        @mcp.tool()
         async def test_target(target_id: int) -> str:
             """Run a connection test against a target. Returns { success, message }
             so even a failed test is a valid response — don't treat false as an error."""
@@ -372,8 +448,12 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
 
         @mcp.tool()
         async def get_vm_credentials(vm_id: int) -> str:
-            """Reveal the deploy-time SSH credentials for a VM (username + password
-            decrypted on demand). Sensitive — the API call is audit-logged."""
+            """Reveal the SSH login Forgemill uses for a VM (sensitive,
+            audit-logged): username, kind (password|private_key), source (vm =
+            set explicitly, deployment = initial deploy credentials), password
+            for password logins — a stored private key is never returned —
+            and set_at/set_by. 404 means the VM has no login yet (adopted and
+            registered VMs until set_vm_credentials)."""
             return _dump(await client.get_vm_credentials(vm_id))
 
         @mcp.tool()
