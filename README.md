@@ -57,7 +57,9 @@ All configuration is via environment variables.
 - `dashboard_summary` — counts and recent activity
 - `list_targets` / `get_target` / `get_target_resources` — configured hypervisors + their datastore/network/folder inventory
 - `list_templates` / `get_template` — synced templates
-- `list_vms` — managed VMs, with optional filters: `power_state`, `target_name`, `os_match`
+- `list_vms` — managed VMs, with optional filters: `power_state`, `target_name`, `os_match`, `origin` (`deployed` / `adopted` / `registered`)
+- `discover_vms(target_id, include_ignored?)` — VMs on a target that Forgemill doesn't manage, live from the hypervisor (refs for `adopt_vms`)
+- `list_ignored_vms(target_id)` — VMs hidden from discovery on a target
 - `get_vm` — full VM record
 - `list_vm_snapshots` — snapshots for a VM
 - `list_vm_disks` — disks attached to a VM
@@ -84,7 +86,12 @@ VM lifecycle:
 - `revert_snapshot(vm_id, snapshot_id)`
 - `delete_snapshot(vm_id, snapshot_id)`
 - `delete_vm(vm_id, force?)`
-- `get_vm_credentials(vm_id)` — reveals stored deploy-time SSH credentials (sensitive, audit-logged)
+- `get_vm_credentials(vm_id)` — reveals the SSH login Forgemill uses for the VM (sensitive, audit-logged; a stored private key is never returned)
+- `set_vm_credentials(vm_id, username, password? | private_key?)` / `clear_vm_credentials(vm_id)` — set or remove the explicit SSH login for a VM (needed for adopted VMs; overrides deploy credentials)
+
+Discover & adopt *(admin by default; Forgemill's `vm_adoption_role` setting can open it to operators)*:
+- `adopt_vms(target_id, vm_refs)` — take existing VMs under management (refs from `discover_vms`); returns `adopted[]` and `skipped[]` with reasons
+- `ignore_discovered_vms(target_id, vm_refs)` / `unignore_discovered_vms(target_id, vm_refs)` — hide noise from discovery, reversibly
 
 Actions:
 - `execute_action(vm_id, action_id? | script?, parameter_values?, timeout_seconds?)`
