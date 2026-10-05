@@ -223,7 +223,9 @@ pytest
 
 ## Versioning
 
-Released images are published to `ghcr.io/blink-zero/forgemill-mcp` on every tag matching `v*.*.*`. The mainline tag (`:latest`) tracks `main`.
+forgemill-mcp is versioned **in lockstep with Forgemill on major.minor**: mcp `0.20.x` understands the Forgemill `0.20.x` API. Run the same major.minor on both sides; patch numbers move independently. A minor release of Forgemill always comes with a matching MCP tag (even when nothing changed here), and the server logs a warning at startup — and `server_version` reports it — if the pair doesn't match.
+
+Released images are published to `ghcr.io/blink-zero/forgemill-mcp` on every tag matching `v*.*.*`. The mainline tag (`:latest`) tracks `main`. (Versions jumped from 0.12.1 straight to 0.20.0 when the schemes were aligned.)
 
 ---
 

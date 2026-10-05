@@ -8,17 +8,40 @@ FORGEMILL_MCP_ALLOW_MUTATIONS so the server runs read-only by default.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+import re
 from datetime import UTC, datetime
 from typing import Any
 
 from fastmcp import FastMCP
 
+from . import __version__
 from .client import ForgemillClient, ForgemillError
 from .config import Settings
 
 logger = logging.getLogger("forgemill_mcp")
+
+
+def _major_minor(version: str) -> tuple[int, int] | None:
+    """"0.20.1" / "v0.20.1-rc1" → (0, 20); None for "dev" and other non-versions."""
+    m = re.match(r"v?(\d+)\.(\d+)", version.strip())
+    return (int(m.group(1)), int(m.group(2))) if m else None
+
+
+def compatibility_warning(mcp_version: str, server_version: str) -> str | None:
+    """forgemill-mcp and Forgemill share major.minor; a mismatch means tools
+    may be missing on one side. Returns the warning to log, or None when the
+    pair matches (or either side is an unversioned dev build)."""
+    ours, theirs = _major_minor(mcp_version), _major_minor(server_version)
+    if ours is None or theirs is None or ours == theirs:
+        return None
+    return (
+        f"version mismatch: forgemill-mcp {mcp_version} expects Forgemill {ours[0]}.{ours[1]}.x "
+        f"but the server reports {server_version} — some tools may be missing or behave differently; "
+        f"use the same major.minor on both sides"
+    )
 
 
 def _dump(payload: Any) -> str:
@@ -149,11 +172,16 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
 
     @mcp.tool()
     async def server_version() -> str:
-        """Return the version and commit of the connected Forgemill server."""
+        """Version and commit of the connected Forgemill server, plus this MCP
+        server's own version. The two are released in lockstep on major.minor
+        (mcp 0.20.x ↔ Forgemill 0.20.x); `compatibility_warning` is set when
+        they differ."""
         try:
-            return _dump(await client.version())
+            info = await client.version()
         except ForgemillError as e:
             return f"error: {e}"
+        warning = compatibility_warning(__version__, str(info.get("version", "")))
+        return _dump({"forgemill": info, "forgemill_mcp": __version__, "compatibility_warning": warning})
 
     @mcp.tool()
     async def dashboard_summary() -> str:
@@ -851,6 +879,24 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
     return mcp
 
 
+def _check_compatibility(client: ForgemillClient) -> None:
+    """Best-effort startup check: log the Forgemill version and warn on a
+    major.minor mismatch. Never fatal — the server may simply be down yet."""
+
+    async def probe() -> None:
+        try:
+            info = await client.version()
+        except Exception as e:  # noqa: BLE001 — anything here is informational
+            logger.warning("could not read Forgemill version at startup: %s", e)
+            return
+        server = str(info.get("version", ""))
+        logger.info("forgemill-mcp %s connected to Forgemill %s", __version__, server or "?")
+        if warning := compatibility_warning(__version__, server):
+            logger.warning("%s", warning)
+
+    asyncio.run(probe())
+
+
 def main() -> None:
     logging.basicConfig(
         level=logging.INFO,
@@ -882,6 +928,7 @@ def main() -> None:
         timeout=settings.request_timeout_seconds,
     )
     mcp = build_server(settings, client)
+    _check_compatibility(client)
 
     # Streamable HTTP transport — recommended for containerised servers.
     # See https://gofastmcp.com/deployment/running-server
