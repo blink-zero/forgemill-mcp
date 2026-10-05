@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "forgemill-mcp"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Model Context Protocol server for Forgemill — VM deployment and lifecycle management."
 readme = "README.md"
 license = { text = "MIT" }
@@ -67,3 +67,6 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+
+[tool.hatch.version]
+path = "src/forgemill_mcp/__init__.py"
