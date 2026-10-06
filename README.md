@@ -87,7 +87,8 @@ VM lifecycle:
 - `delete_snapshot(vm_id, snapshot_id)`
 - `delete_vm(vm_id, force?)`
 - `get_vm_credentials(vm_id)` — reveals the SSH login Forgemill uses for the VM (sensitive, audit-logged; a stored private key is never returned)
-- `set_vm_credentials(vm_id, username, password? | private_key?)` / `clear_vm_credentials(vm_id)` — set or remove the explicit SSH login for a VM (needed for adopted VMs; overrides deploy credentials)
+- `set_vm_credentials(vm_id, username, password? | private_key?, sudo_password?, force?)` / `clear_vm_credentials(vm_id)` — set or remove the explicit SSH login for a VM (needed for adopted VMs; overrides deploy credentials). Forgemill tries the login and sudo on the VM before saving and refuses ones that can't run actions unless `force`
+- `test_vm_credentials(vm_id, username, password? | private_key?, sudo_password?)` — try credentials without storing them; tells SSH failures apart from sudo ones (`needs_password`, `wrong_password`, `not_permitted`, `requiretty`)
 
 Discover & adopt *(admin by default; Forgemill's `vm_adoption_role` setting can open it to operators)*:
 - `adopt_vms(target_id, vm_refs)` — take existing VMs under management (refs from `discover_vms`); returns `adopted[]` and `skipped[]` with reasons
