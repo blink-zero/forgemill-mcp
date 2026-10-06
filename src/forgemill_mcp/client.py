@@ -78,6 +78,37 @@ class ForgemillClient:
     async def get_target_resources(self, target_id: int) -> dict[str, Any]:
         return await self._request("GET", f"/targets/{target_id}/resources")
 
+    # --- Discover & adopt (Forgemill v0.20.0+) -------------------------------
+
+    async def discover_vms(
+        self, target_id: int, *, include_ignored: bool = False
+    ) -> dict[str, Any]:
+        """Live list of VMs on a target that Forgemill doesn't manage
+        (templates excluded): target_id, target_name, computed_at, managed,
+        unmanaged, ignored counts and vms[] with ref, name, power_state,
+        ip_address, cpu, memory_mb, disk_gb, guest_id, host, ignored."""
+        params = {"include_ignored": "true"} if include_ignored else {}
+        return await self._request("GET", f"/targets/{target_id}/discover", params=params)
+
+    async def list_ignored_vms(self, target_id: int) -> list[dict[str, Any]]:
+        return await self._request("GET", f"/targets/{target_id}/ignored") or []
+
+    async def adopt_vms(self, target_id: int, vm_refs: list[str]) -> dict[str, Any]:
+        """Take VMs under management by hypervisor ref. Returns adopted[]
+        (full VM records) and skipped[] ({ref, reason})."""
+        return await self._request("POST", f"/targets/{target_id}/adopt", json={"vm_refs": vm_refs})
+
+    async def ignore_discovered_vms(
+        self, target_id: int, vm_refs: list[str], *, names: dict[str, str] | None = None
+    ) -> None:
+        body: dict[str, Any] = {"vm_refs": vm_refs}
+        if names:
+            body["names"] = names
+        await self._request("POST", f"/targets/{target_id}/ignore", json=body)
+
+    async def unignore_discovered_vms(self, target_id: int, vm_refs: list[str]) -> None:
+        await self._request("DELETE", f"/targets/{target_id}/ignore", json={"vm_refs": vm_refs})
+
     # --- Templates ----------------------------------------------------------
 
     async def list_templates(self) -> list[dict[str, Any]]:
@@ -146,8 +177,66 @@ class ForgemillClient:
         return await self._request("POST", "/vms/sync-all", params=params)
 
     async def get_vm_credentials(self, vm_id: int) -> dict[str, Any]:
-        """Reveal the deploy-time credentials for a VM. Admin only on Forgemill side."""
+        """The SSH login Forgemill uses for a VM: username, kind
+        (password|private_key), source (vm|deployment), password (password
+        logins only — a private key or sudo password is never returned),
+        has_sudo_password, set_at. 404 when the VM has none
+        (adopted/registered VMs until set_vm_credentials)."""
         return await self._request("GET", f"/vms/{vm_id}/credentials")
+
+    @staticmethod
+    def _credentials_body(
+        username: str, password: str, private_key: str, sudo_password: str, force: bool
+    ) -> dict[str, Any]:
+        if bool(password) == bool(private_key):
+            raise ValueError("provide exactly one of password or private_key")
+        body: dict[str, Any] = {"username": username}
+        if password:
+            body["password"] = password
+        else:
+            body["private_key"] = private_key
+        if sudo_password:
+            body["sudo_password"] = sudo_password
+        if force:
+            body["force"] = True
+        return body
+
+    async def set_vm_credentials(
+        self,
+        vm_id: int,
+        username: str,
+        *,
+        password: str = "",
+        private_key: str = "",
+        sudo_password: str = "",
+        force: bool = False,
+    ) -> dict[str, Any]:
+        """Store an explicit SSH login for a VM (Forgemill v0.20.0+). Exactly
+        one of password / private_key (unencrypted PEM or OpenSSH).
+        sudo_password is handed to sudo when it asks (needed for key logins
+        whose sudo prompts). Forgemill tries the credentials on the VM first
+        and refuses (422) ones that can't run actions unless force=True.
+        Returns {saved, check}."""
+        body = self._credentials_body(username, password, private_key, sudo_password, force)
+        return await self._request("PUT", f"/vms/{vm_id}/credentials", json=body)
+
+    async def test_vm_credentials(
+        self,
+        vm_id: int,
+        username: str,
+        *,
+        password: str = "",
+        private_key: str = "",
+        sudo_password: str = "",
+    ) -> dict[str, Any]:
+        """Try credentials on the VM without storing them. Returns the check:
+        skipped, ssh_ok, sudo (nopasswd|password|needs_password|
+        wrong_password|not_permitted|requiretty|...), ok, message."""
+        body = self._credentials_body(username, password, private_key, sudo_password, False)
+        return await self._request("POST", f"/vms/{vm_id}/credentials/test", json=body)
+
+    async def clear_vm_credentials(self, vm_id: int) -> None:
+        await self._request("DELETE", f"/vms/{vm_id}/credentials")
 
     async def list_vm_disks(self, vm_id: int) -> list[dict[str, Any]]:
         """Disks live from the hypervisor: key, label, size_gb, datastore,
