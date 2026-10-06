@@ -68,21 +68,41 @@ async def test_adopt_ignore_unignore_send_refs() -> None:
 
 
 @pytest.mark.asyncio
-async def test_set_vm_credentials_sends_exactly_one_secret() -> None:
+async def test_set_vm_credentials_sends_exactly_one_secret_plus_sudo_and_force() -> None:
     bodies: list[dict[str, Any]] = []
+    check = {"skipped": False, "ssh_ok": True, "sudo": "password", "ok": True, "message": "ok"}
 
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.method == "PUT" and request.url.path == "/api/vms/5/credentials"
         bodies.append(httpx.Response(200, content=request.read()).json())
-        return httpx.Response(204)
+        return httpx.Response(200, json={"saved": True, "check": check})
 
     c = _client(handler)
-    await c.set_vm_credentials(5, "root", password="pw")
-    await c.set_vm_credentials(5, "ops", private_key="-----BEGIN OPENSSH PRIVATE KEY-----\nabc")
+    res = await c.set_vm_credentials(5, "root", password="pw")
+    assert res["check"]["sudo"] == "password"
+    await c.set_vm_credentials(5, "ops", private_key="-----BEGIN OPENSSH PRIVATE KEY-----\nabc", sudo_password="s", force=True)
     assert bodies == [
         {"username": "root", "password": "pw"},
-        {"username": "ops", "private_key": "-----BEGIN OPENSSH PRIVATE KEY-----\nabc"},
+        {"username": "ops", "private_key": "-----BEGIN OPENSSH PRIVATE KEY-----\nabc", "sudo_password": "s", "force": True},
     ]
+
+
+@pytest.mark.asyncio
+async def test_test_vm_credentials_posts_to_test_and_refused_set_surfaces_422() -> None:
+    check = {"skipped": False, "ssh_ok": True, "sudo": "needs_password", "ok": False, "message": "SSH login succeeded, but ..."}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/credentials/test"):
+            assert request.method == "POST"
+            assert httpx.Response(200, content=request.read()).json() == {"username": "u", "private_key": "k"}
+            return httpx.Response(200, json=check)
+        return httpx.Response(422, json={"error": check["message"], "check": check})
+
+    c = _client(handler)
+    assert (await c.test_vm_credentials(5, "u", private_key="k"))["sudo"] == "needs_password"
+    with pytest.raises(ForgemillError) as exc:
+        await c.set_vm_credentials(5, "u", private_key="k")
+    assert exc.value.status_code == 422 and "SSH login succeeded" in str(exc.value)
     with pytest.raises(ValueError):
         await c.set_vm_credentials(5, "root")
     with pytest.raises(ValueError):
@@ -108,7 +128,7 @@ async def test_clear_vm_credentials_and_forbidden_surfaces_status() -> None:
 @pytest.mark.asyncio
 async def test_discover_tools_read_only_and_adopt_tools_gated() -> None:
     read = {"discover_vms", "list_ignored_vms"}
-    write = {"adopt_vms", "ignore_discovered_vms", "unignore_discovered_vms", "set_vm_credentials", "clear_vm_credentials"}
+    write = {"adopt_vms", "ignore_discovered_vms", "unignore_discovered_vms", "set_vm_credentials", "test_vm_credentials", "clear_vm_credentials"}
     for allow in (True, False):
         client = _client(lambda r: httpx.Response(200, json={}))
         try:

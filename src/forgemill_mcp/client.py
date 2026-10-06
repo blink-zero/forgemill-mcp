@@ -179,15 +179,15 @@ class ForgemillClient:
     async def get_vm_credentials(self, vm_id: int) -> dict[str, Any]:
         """The SSH login Forgemill uses for a VM: username, kind
         (password|private_key), source (vm|deployment), password (password
-        logins only — a private key is never returned), set_at. 404 when the
-        VM has none (adopted/registered VMs until set_vm_credentials)."""
+        logins only — a private key or sudo password is never returned),
+        has_sudo_password, set_at. 404 when the VM has none
+        (adopted/registered VMs until set_vm_credentials)."""
         return await self._request("GET", f"/vms/{vm_id}/credentials")
 
-    async def set_vm_credentials(
-        self, vm_id: int, username: str, *, password: str = "", private_key: str = ""
-    ) -> None:
-        """Store an explicit SSH login for a VM (Forgemill v0.20.0+). Exactly
-        one of password / private_key (unencrypted PEM or OpenSSH)."""
+    @staticmethod
+    def _credentials_body(
+        username: str, password: str, private_key: str, sudo_password: str, force: bool
+    ) -> dict[str, Any]:
         if bool(password) == bool(private_key):
             raise ValueError("provide exactly one of password or private_key")
         body: dict[str, Any] = {"username": username}
@@ -195,7 +195,45 @@ class ForgemillClient:
             body["password"] = password
         else:
             body["private_key"] = private_key
-        await self._request("PUT", f"/vms/{vm_id}/credentials", json=body)
+        if sudo_password:
+            body["sudo_password"] = sudo_password
+        if force:
+            body["force"] = True
+        return body
+
+    async def set_vm_credentials(
+        self,
+        vm_id: int,
+        username: str,
+        *,
+        password: str = "",
+        private_key: str = "",
+        sudo_password: str = "",
+        force: bool = False,
+    ) -> dict[str, Any]:
+        """Store an explicit SSH login for a VM (Forgemill v0.20.0+). Exactly
+        one of password / private_key (unencrypted PEM or OpenSSH).
+        sudo_password is handed to sudo when it asks (needed for key logins
+        whose sudo prompts). Forgemill tries the credentials on the VM first
+        and refuses (422) ones that can't run actions unless force=True.
+        Returns {saved, check}."""
+        body = self._credentials_body(username, password, private_key, sudo_password, force)
+        return await self._request("PUT", f"/vms/{vm_id}/credentials", json=body)
+
+    async def test_vm_credentials(
+        self,
+        vm_id: int,
+        username: str,
+        *,
+        password: str = "",
+        private_key: str = "",
+        sudo_password: str = "",
+    ) -> dict[str, Any]:
+        """Try credentials on the VM without storing them. Returns the check:
+        skipped, ssh_ok, sudo (nopasswd|password|needs_password|
+        wrong_password|not_permitted|requiretty|...), ok, message."""
+        body = self._credentials_body(username, password, private_key, sudo_password, False)
+        return await self._request("POST", f"/vms/{vm_id}/credentials/test", json=body)
 
     async def clear_vm_credentials(self, vm_id: int) -> None:
         await self._request("DELETE", f"/vms/{vm_id}/credentials")

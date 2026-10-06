@@ -441,18 +441,62 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
 
         @mcp.tool()
         async def set_vm_credentials(
-            vm_id: int, username: str, password: str = "", private_key: str = ""
+            vm_id: int,
+            username: str,
+            password: str = "",
+            private_key: str = "",
+            sudo_password: str = "",
+            force: bool = False,
         ) -> str:
             """Store the SSH login Forgemill uses to run actions on a VM —
             required for adopted/registered VMs, and the way to update a
             deployed VM after a password rotation (it takes precedence over the
             deployment's credentials). Exactly one of password or private_key
             (an unencrypted OpenSSH/PEM key; passphrase-protected keys are
-            rejected). The user needs passwordless sudo. Stored encrypted; the
-            secret is never written to the audit log and a private key is never
-            returned by get_vm_credentials. Same role gate as adopt_vms."""
-            await client.set_vm_credentials(vm_id, username, password=password, private_key=private_key)
-            return _dump({"vm_id": vm_id, "username": username, "kind": "private_key" if private_key else "password"})
+            rejected).
+
+            Actions run under sudo, so the user must be able to sudo. With a
+            password login Forgemill hands that password to sudo if it asks;
+            a key login needs either passwordless sudo (NOPASSWD) on the VM or
+            sudo_password set here. Forgemill tries the credentials on the VM
+            before saving (SSH login, then sudo) and refuses ones that can't run
+            actions — the result tells you exactly which part failed: sudo is
+            one of nopasswd, password, needs_password, wrong_password,
+            not_permitted, requiretty. Pass force=true to store them anyway
+            (e.g. the VM is off). Secrets are stored encrypted and never
+            returned. Same role gate as adopt_vms."""
+            res = await client.set_vm_credentials(
+                vm_id,
+                username,
+                password=password,
+                private_key=private_key,
+                sudo_password=sudo_password,
+                force=force,
+            )
+            return _dump(res)
+
+        @mcp.tool()
+        async def test_vm_credentials(
+            vm_id: int,
+            username: str,
+            password: str = "",
+            private_key: str = "",
+            sudo_password: str = "",
+        ) -> str:
+            """Try SSH credentials on a VM without storing them. Reports
+            skipped (VM off / no address), ssh_ok, sudo state (nopasswd |
+            password | needs_password | wrong_password | not_permitted |
+            requiretty), ok, and a one-sentence message. Use it to diagnose
+            "SSH works but actions fail" before changing anything: ssh_ok=true
+            with ok=false means the login is fine and sudo is the problem."""
+            res = await client.test_vm_credentials(
+                vm_id,
+                username,
+                password=password,
+                private_key=private_key,
+                sudo_password=sudo_password,
+            )
+            return _dump(res)
 
         @mcp.tool()
         async def clear_vm_credentials(vm_id: int) -> str:
