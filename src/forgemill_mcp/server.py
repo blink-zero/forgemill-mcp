@@ -322,9 +322,14 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
         return _dump(await client.list_vm_nics(vm_id))
 
     @mcp.tool()
-    async def list_actions() -> str:
-        """List available post-deploy actions (built-in and custom)."""
-        return _dump(await client.list_actions())
+    async def list_actions(include_drafts: bool = False) -> str:
+        """List runnable post-deploy actions (built-in and custom). Drafts —
+        actions saved but not published, including ones drafted by Forgemill's
+        AI assistant — are never runnable and are hidden unless
+        include_drafts=true; each action carries status (active | draft) and
+        source (user | ai). execute_action and deploy_vm refuse drafts; use
+        publish_action after a human has reviewed one."""
+        return _dump(await client.list_actions(include_drafts=include_drafts))
 
     @mcp.tool()
     async def get_action(action_id: int) -> str:
@@ -879,6 +884,14 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
                 "tags": tags or [],
             }
             return _dump(await client.update_action(action_id, body))
+
+        @mcp.tool()
+        async def publish_action(action_id: int) -> str:
+            """Publish a draft action so it becomes runnable (admin). Only do this
+            when the user has reviewed the draft and asks for it — drafts exist
+            precisely so nothing the AI wrote runs without a person reading it.
+            409 if the action is not a draft."""
+            return _dump(await client.publish_action(action_id))
 
         @mcp.tool()
         async def delete_action(action_id: int) -> str:

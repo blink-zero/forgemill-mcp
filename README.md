@@ -66,7 +66,7 @@ All configuration is via environment variables.
 - `list_vm_nics` — every network adapter on a VM: network/bridge, model, MAC, VLAN, connected, guest-reported addresses
 - `list_vm_executions` — action history for a VM
 - `get_vm_console_url` — VMRC / noVNC URL for a VM *(admin-only on the Forgemill side)*
-- `list_actions` — available post-deploy actions (built-in + custom)
+- `list_actions(include_drafts?)` — runnable post-deploy actions (built-in + custom); drafts (saved, never runnable) only when asked
 - `get_action` — full action record by ID (script + parameter schema)
 - `export_actions(action_ids?)` — actions as the same JSON Forgemill's web UI downloads; omit `action_ids` to export everything
 - `get_execution` — execution details and output
@@ -100,6 +100,7 @@ Actions:
 - `create_action(name, description, category, script, parameters?, script_type?, platform?)` *(admin-only)*
 - `update_action(action_id, name?, description?, category?, script?, parameters?, ...)` *(admin-only — refuses built-ins)*
 - `delete_action(action_id)` *(admin-only — refuses built-ins)*
+- `publish_action(action_id)` — make a reviewed draft runnable *(admin-only; only on the user's explicit request)*
 - `import_actions(actions)` — bulk-create from a list of exported entries (from `export_actions` or the web UI's download); bad entries fail individually without blocking the rest *(admin-only)*
 
 Deployment:
