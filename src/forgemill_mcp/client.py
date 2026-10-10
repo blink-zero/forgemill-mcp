@@ -332,8 +332,18 @@ class ForgemillClient:
 
     # --- Actions / executions ---------------------------------------------
 
-    async def list_actions(self) -> list[dict[str, Any]]:
-        return await self._request("GET", "/actions") or []
+    async def list_actions(self, *, include_drafts: bool = False) -> list[dict[str, Any]]:
+        """Runnable actions. Drafts (saved, not published, never runnable —
+        Forgemill v0.22.0+) are included only when include_drafts is true;
+        each action carries status ("active" | "draft") and source
+        ("user" | "ai")."""
+        params = {"include_drafts": "true"} if include_drafts else {}
+        return await self._request("GET", "/actions", params=params) or []
+
+    async def publish_action(self, action_id: int) -> dict[str, Any]:
+        """Publish a draft action so it can run (Forgemill v0.22.0+). 409 if
+        it is not a draft; 400 if its content would not pass create."""
+        return await self._request("POST", f"/actions/{action_id}/publish")
 
     async def get_action(self, action_id: int) -> dict[str, Any] | None:
         """Forgemill doesn't expose GET /actions/{id} — fetch the list and filter.
