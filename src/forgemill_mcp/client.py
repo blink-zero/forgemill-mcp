@@ -238,6 +238,13 @@ class ForgemillClient:
     async def clear_vm_credentials(self, vm_id: int) -> None:
         await self._request("DELETE", f"/vms/{vm_id}/credentials")
 
+    async def set_vm_address(self, vm_id: int, address: str) -> dict[str, Any]:
+        """Set (or clear with "") the address Forgemill connects to for a VM
+        when the hypervisor can't report one — no guest agent (Forgemill
+        v0.24.0+). An IP or hostname; sync never overwrites it. Returns the
+        VM record with address_override set."""
+        return await self._request("PUT", f"/vms/{vm_id}/address", json={"address": address})
+
     async def list_vm_disks(self, vm_id: int) -> list[dict[str, Any]]:
         """Disks live from the hypervisor: key, label, size_gb, datastore,
         provisioning (thin/thick on vSphere; volume format on Proxmox),

@@ -89,6 +89,7 @@ VM lifecycle:
 - `get_vm_credentials(vm_id)` — reveals the SSH login Forgemill uses for the VM (sensitive, audit-logged; a stored private key is never returned)
 - `set_vm_credentials(vm_id, username, password? | private_key?, sudo_password?, force?)` / `clear_vm_credentials(vm_id)` — set or remove the explicit SSH login for a VM (needed for adopted VMs; overrides deploy credentials). Forgemill tries the login and sudo on the VM before saving and refuses ones that can't run actions unless `force`
 - `test_vm_credentials(vm_id, username, password? | private_key?, sudo_password?)` — try credentials without storing them; tells SSH failures apart from sudo ones (`needs_password`, `wrong_password`, `not_permitted`, `requiretty`)
+- `set_vm_address(vm_id, address)` — set (`""` clears) the address Forgemill connects to when the hypervisor can't report one, i.e. no guest agent: an adopted VM shows `ip_address: ""` and actions are refused with "Forgemill doesn't know this VM's address" until the agent is installed or this is set. Kept across syncs; the VM record carries it as `address_override`
 
 Discover & adopt *(admin by default; Forgemill's `vm_adoption_role` setting can open it to operators)*:
 - `adopt_vms(target_id, vm_refs)` — take existing VMs under management (refs from `discover_vms`); returns `adopted[]` and `skipped[]` with reasons
@@ -113,6 +114,8 @@ Targets:
 - `sync_target_templates(target_id)` — pulls the latest templates from a target
 
 Each mutating call still goes through the regular Forgemill RBAC checks — the API key inherits its user's role.
+
+**Not exposed on purpose** — Forgemill's bulk credential export (Settings → Credentials, `.1pux`/CSV for 1Password) re-verifies the admin's password and refuses API keys, so there is no MCP tool for it.
 
 **Heads up on roles** — most mutating endpoints in Forgemill require **admin** (power, snapshot, delete, resize, disk expand, NIC add, target test/sync, VM credentials, action create/update/delete). `execute_action`, `deploy_vm`, and `deploy_from_blueprint` are **user+**. If your API key is for a viewer or user, the corresponding tools will return a 403 from Forgemill. Plan accordingly when issuing the key.
 
