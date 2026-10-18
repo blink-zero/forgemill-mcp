@@ -423,7 +423,11 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
             VMID "105"). Nothing on the hypervisor changes: each VM gets a
             Forgemill record (origin=adopted), is synced right away, and power /
             snapshots / disks / NICs / sync / destroy work immediately. Running
-            actions needs an SSH login — call set_vm_credentials afterwards.
+            actions needs an SSH login — call set_vm_credentials afterwards —
+            and an address: hypervisors only report one through the guest
+            agent (QEMU guest agent / VMware Tools), so a VM without one shows
+            ip_address "" until you install the agent and sync or call
+            set_vm_address.
             Already-managed, unknown or template refs are reported in skipped[]
             with a reason rather than failing the whole call. Admin by default;
             the vm_adoption_role setting can open it to operators."""
@@ -489,7 +493,8 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
             sudo_password: str = "",
         ) -> str:
             """Try SSH credentials on a VM without storing them. Reports
-            skipped (VM off / no address), ssh_ok, sudo state (nopasswd |
+            skipped (VM off, or no_address=true when Forgemill has no address
+            for the VM — see set_vm_address), ssh_ok, sudo state (nopasswd |
             password | needs_password | wrong_password | not_permitted |
             requiretty), ok, and a one-sentence message. Use it to diagnose
             "SSH works but actions fail" before changing anything: ssh_ok=true
@@ -502,6 +507,20 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
                 sudo_password=sudo_password,
             )
             return _dump(res)
+
+        @mcp.tool()
+        async def set_vm_address(vm_id: int, address: str) -> str:
+            """Tell Forgemill where a VM is when the hypervisor can't. Hypervisors
+            only report a guest's address through the guest agent (QEMU guest
+            agent on Proxmox, VMware Tools on ESXi/vCenter); a VM without one
+            has ip_address "" and every action is refused with "Forgemill
+            doesn't know this VM's address". address is an IP or hostname
+            (no scheme/port); "" clears it and goes back to the hypervisor-
+            reported address. Stored as address_override on the VM, used for
+            actions, credential checks and the ssh:// URL; sync never overwrites
+            it. The other fix is installing the agent and calling sync_vm.
+            Same role gate as adopt_vms; audited."""
+            return _dump(await client.set_vm_address(vm_id, address))
 
         @mcp.tool()
         async def clear_vm_credentials(vm_id: int) -> str:
@@ -674,7 +693,11 @@ def build_server(settings: Settings, client: ForgemillClient) -> FastMCP:
             timeout_seconds: int | None = None,
         ) -> str:
             """Run a saved action (by action_id) or an ad-hoc bash script on a VM via
-            SSH. Exactly one of action_id or script must be provided."""
+            SSH. Exactly one of action_id or script must be provided. A run that
+            Forgemill turns down before SSH (VM off, no address, no SSH login,
+            concurrency cap, bad parameters) raises with the reason in the
+            message; "no address" means install the guest agent and sync_vm, or
+            set_vm_address."""
             if (action_id is None) == (script is None):
                 return "error: provide exactly one of action_id or script"
             return _dump(
